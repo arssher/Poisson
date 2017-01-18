@@ -1,0 +1,6 @@
+core.*
+poisson.out
+poisson.err
+poisson
+*.o
+tol/

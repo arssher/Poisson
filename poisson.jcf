@@ -1,0 +1,8 @@
+# @ job_type = bluegene
+# @ class = n128_m15
+# @ output = poisson.out
+# @ error = poisson.err
+# @ wall_clock_limit = 00:05:00
+# @ bg_size = 128
+# @ queue
+/bgsys/drivers/ppcfloor/bin/mpirun -exe /gpfs/data/edu-cmc-stud16-628-06/task2/poisson -mode VN -args "0 0 5 5" -n 10
