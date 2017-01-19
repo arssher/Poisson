@@ -20,6 +20,10 @@ Poisson::Poisson(double x0, double y0, double square_size, int grid_size,
 	for (int i = 0; i < 2; i++ ) {
 		dots[i] = NULL;
 	}
+	for (int i = 0; i < 4; i++ ) {
+		send_buffers[i] = NULL;
+		recv_buffers[i] = NULL;
+	}
 	/* Set rank and size */
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
@@ -45,8 +49,11 @@ Poisson::Poisson(double x0, double y0, double square_size, int grid_size,
 	ranks[0] = rank % proc_grid_size;
 	ranks[1] = rank / proc_grid_size;
 
-	if (grid_size < proc_grid_size) {
-		throw PoissonException("Error: grid size must be >= proc grid size\n");
+	/* We demand it to avoid fuss when the same dot occurs to be several
+	 * corners, when dot matrix is less than 2x2.
+     */
+	if (grid_size < 2*proc_grid_size) {
+		throw PoissonException("Error: grid size must be >= 2*proc grid size\n");
 	}
 	LOG_DEBUG_MASTER("Square starts at (%f, %f) of size %f, grid size %d\n",
 					 x0, y0, square_size, grid_size);
@@ -142,6 +149,13 @@ void Poisson::CalculateDots(double x0, double y0, double square_size,
 void Poisson::Solve() {
 	resid_matr = Matrix(dots_num[0], dots_num[1]);
 	sol_matr = Matrix(dots_num[0], dots_num[1]);
+
+	/* allocate send & recv buffers */
+	for (int i = 0; i < 4; i++) {
+		send_buffers[i] = new double[dots_num[(i + 1) % 2]];
+		recv_buffers[i] = new double[dots_num[(i + 1) % 2]];
+	}
+
 	InitSolMatr();
 	CalcResidMatr();
 }
@@ -200,6 +214,8 @@ void Poisson::ApplyLaplace(const Matrix &matr, Matrix &lap_matr) {
 											matr(i + 1, j), matr(i, j - 1),
 											matr(i, j + 1));
 		}
+
+	ExchangeData(matr);
 }
 
 /*
@@ -210,6 +226,24 @@ double Poisson::LaplaceFormula(double center, double left, double right,
 							 double bottom, double top) {
 	double numerator = 4*center - left - right - bottom - top;
 	return numerator / (step*step);
+}
+
+/*
+ * Exchange data with 4 neighbors needed for Laplace operator.
+ *
+ */
+void Poisson::ExchangeData(const Matrix &matr) {
+
+}
+
+/*
+ * Determines whether this processor sends the data first, sets send_first
+ */
+void Poisson::SendFirst() {
+	if (ranks[1] % 2 == 0)
+		send_first = ranks[0] % 2 == 0;
+	else
+		send_first = ranks[0] % 2 == 1;
 }
 
 /* Fill the (global) borders. Each corner will be set twice, but that's not a
@@ -243,5 +277,11 @@ Poisson::~Poisson() {
 		if (dots[i]) {
 			delete[] dots[i];
 		}
+	}
+	for (int i = 0; i < 4; i++) {
+		if (send_buffers[i])
+			delete[] send_buffers[i];
+		if (recv_buffers[i])
+			delete[] recv_buffers[i];
 	}
 }
