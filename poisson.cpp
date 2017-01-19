@@ -7,6 +7,7 @@
 #include "lib/macrologger.h"
 #include "poisson.hpp"
 
+static double zero_filler(double x, double y) { return 0.0; };
 
 Poisson::Poisson(double x0, double y0, double square_size, int grid_size,
 				 double (*_F)(double x, double y),
@@ -93,8 +94,8 @@ void Poisson::DistributeDots(int grid_size) {
 	    inner_dots_range[i] = dots_range[i] + add_or_substract[i] * borders[i];
 	}
 
-	LOG_DEBUG("My rank is %d, i.e. (%d , %d), I own %d x %d dots and right touching is %d\n",
-			  rank, ranks[0], ranks[1], dots_num[0], dots_num[1], borders[2]);
+	LOG_DEBUG("My rank is %d, i.e. (%d , %d), I own %d x %d dots and top touching is %d\n",
+			  rank, ranks[0], ranks[1], dots_num[0], dots_num[1], borders[3]);
 }
 
 /* Calculate values of dots this processor works on
@@ -147,39 +148,45 @@ void Poisson::Solve() {
  * inner dots.
  */
 void Poisson::InitSolMatr() {
-	/* The borders. Each corner will be initialized twice, but that's not a
-	 * big deal and simplifies code a bit.
-	 */
-
-	int fixed_coord[4] = {0, 0, dots_num[0], dots_num[1]};
-	for (int r = 0; r < 4; r++) {
-		if (borders[r]) {
-			if (r % 2  == 0) { /* vertical border */
-				for (int j = 0; j < dots_num[1]; j++) {
-					sol_matr(fixed_coord[r], j) =
-						(*Phi)(dots[0][fixed_coord[r]], dots[1][j]);
-				}
-			}
-			else { /* horizontal border */
-				for (int i = 0; i < dots_num[0]; i++) {
-					sol_matr(i, fixed_coord[r]) =
-						(*Phi)(dots[0][i], dots[1][fixed_coord[r]]);
-				}
-			}
-		}
-	}
+	FillBorders(sol_matr, Phi);
 
 	/* Inner part */
 	srand(time(NULL));
 	for (int i = inner_dots_range[0]; i < inner_dots_range[2]; i++)
 		for (int j = inner_dots_range[1]; j < inner_dots_range[3]; j++) {
-			sol_matr(i, j) = rand();
+			/* not sure which values here are better */
+			sol_matr(i, j) = rand() % 4096;
 		}
 
 	/* For debugging */
-	if (rank == 8) {
-		printf("sol values of proc with rank 8:\n");
+	int deb_rank = 8;
+	if (rank == deb_rank) {
+		printf("sol values of proc with rank %d:\n", deb_rank);
 		sol_matr.Print();
+	}
+}
+
+
+/* Fill the (global) borders. Each corner will be set twice, but that's not a
+ * big deal and simplifies code a bit.
+ */
+void Poisson::FillBorders(Matrix &matr, double (*filler)(double x, double y)) {
+	int fixed_coord[4] = {0, 0, dots_num[0] - 1, dots_num[1] - 1};
+	for (int r = 0; r < 4; r++) {
+		if (borders[r]) {
+			if (r % 2  == 0) { /* vertical border */
+				for (int j = 0; j < dots_num[1]; j++) {
+					matr(fixed_coord[r], j) =
+						(*filler)(dots[0][fixed_coord[r]], dots[1][j]);
+				}
+			}
+			else { /* horizontal border */
+				for (int i = 0; i < dots_num[0]; i++) {
+					matr(i, fixed_coord[r]) =
+						(*filler)(dots[0][i], dots[1][fixed_coord[r]]);
+				}
+			}
+		}
 	}
 }
 

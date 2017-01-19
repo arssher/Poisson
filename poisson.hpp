@@ -48,12 +48,13 @@ private:
 	/* this processor touches the [left, bottom, right, top] border? */
 	bool borders[4];
     /* These 4 indexes (x_min, y_min, x_max, y_max) show range of inner dots
-	 * area part for this processor. In the simplest case, when the processor
-	 * doesn't touch any borders, it will be (0, 0, dots_num[0], dots_num[1]).
-	 * If, for instance, it touches the right border and the bottom border, it
-	 * will be (0, 1, dots_num[0] - 1, dots_num[1])
-	 * We use it to avoid ugly '-1' and '+1' indexes while looping over
-	 * the inner part.
+	 * area part for this processor. Note that 'inner' here means globally
+	 * inner, not inner just for this processor! In the simplest case, when
+	 * the processor doesn't touch any borders, it will be (0, 0, dots_num[0],
+	 * dots_num[1]).  If, for instance, it touches the right border and the
+	 * bottom border, it will be (0, 1, dots_num[0] - 1, dots_num[1]). We use
+	 * it to avoid ugly '-1' and '+1' indexes while looping over the inner
+	 * part.
 	 */
 	int inner_dots_range[4];
 
@@ -72,6 +73,7 @@ private:
 	void CalculateDots(double x0, double y0, double square_size, int grid_size);
 	void Solve();
 	void InitSolMatr();
+	void FillBorders(Matrix &matr, double (*filler)(double x, double y));
 public:
    /* (x0, y0) and square_size define the square we are working on.
     * grid_size*grid_size is the total number of dots
