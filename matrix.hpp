@@ -1,19 +1,23 @@
-/* Dummy m x n matrix of doubles */
+/* Dummy matrix of doubles with m rows and n columns, growing
+ * from the bottom left corner.
+ */
 class Matrix {
 public:
-	Matrix(int m, int n);
+	/* = 0 to make Matrix() constructor available */
+	Matrix(int _n = 0, int _m = 0);
 	~Matrix();
 	Matrix(const Matrix &matr);
 	Matrix& operator=(const Matrix &matr);
-	double operator()(int i, int j) const { return data[i*n + j]; }
-	double& operator()(int i, int j) { return data[i*n + j]; }
+	/* return element on column i and row j */
+	double operator()(int i, int j) const { return data[j*n + i]; }
+	double& operator()(int i, int j) { return data[j*n + i]; }
 	/* The caller must allocate memory himself */
-	void GetRow(int i, double *buf);
-	void GetColumn(int j, double *buf);
+	void GetRow(int j, double *buf);
+	void GetColumn(int i, double *buf);
 	void Print() const;
 private:
-	int m;
-	int n;
+	int n; /* cols */
+	int m; /* rows */
 	double *data;
 	int *refcounter;
 };

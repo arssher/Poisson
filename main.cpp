@@ -6,13 +6,8 @@
 #include "lib/macrologger.h"
 #include "poisson.hpp"
 
-class Poisson6 : public Poisson {
-public:
-	Poisson6(double x0, double y0, double square_size, int grid_size) :
-		Poisson(x0, y0, square_size, grid_size) {}
-
-	double F(double x, double y) const { return 23.2; }
-};
+double F(double x, double y)  { return 23.2; }
+double Phi(double x, double y)  { return 42.3; }
 
 int main(int argc, char** argv) {
 	MPI_Init(&argc,&argv);
@@ -30,7 +25,7 @@ int main(int argc, char** argv) {
 	int grid_size = atoi(argv[4]);
 
 	try {
-		Poisson6 poiss(x0, y0, square_size, grid_size);
+		Poisson poiss(x0, y0, square_size, grid_size, &F, &Phi);
 	}
 	catch (std::exception &e) {
 		fprintf(stderr, "%s\n", e.what());

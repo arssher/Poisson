@@ -2,9 +2,9 @@
 
 #include "matrix.hpp"
 
-Matrix::Matrix(int _m, int _n) : m(_m), n(_n) {
+Matrix::Matrix(int _n, int _m) : m(_m), n(_n) {
 	refcounter = new int(1);
-	data = new double[m*n];
+	data = new double[n*m];
 }
 
 Matrix::~Matrix() {
@@ -15,35 +15,35 @@ Matrix::~Matrix() {
 	}
 }
 
-Matrix::Matrix(const Matrix &matr) : m(matr.m), n(matr.n) {
+Matrix::Matrix(const Matrix &matr) : n(matr.n), m(matr.m) {
 	refcounter = matr.refcounter;
 	(*refcounter)++;
 	data = matr.data;
 }
 
 Matrix& Matrix::operator=(const Matrix &matr) {
-	m = matr.m;
 	n = matr.n;
+	m = matr.m;
 	refcounter = matr.refcounter;
 	(*refcounter)++;
 	data = matr.data;
 }
 
 void Matrix::Print() const {
-	for (int i = m - 1; i >= 0; i--) {
-		for (int j = 0; j < n; j++) {
+	for (int j = m - 1; j >= 0; j--) {
+		for (int i = 0; i < n; i++) {
 			printf("%f ", (*this)(i, j));
 		}
 		printf("\n");
 	}
 }
 
-void Matrix::GetRow(int i, double *buf) {
+void Matrix::GetRow(int j, double *buf) {
 	for (int p = 0; p < n; p++)
-		buf[p] = (*this)(i, p);
+		buf[p] = (*this)(p, j);
 }
 
-void Matrix::GetColumn(int j, double *buf) {
+void Matrix::GetColumn(int i, double *buf) {
 	for (int q = 0; q < m; q++)
-		buf[q] = (*this)(q, j);
+		buf[q] = (*this)(i, q);
 }

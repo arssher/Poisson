@@ -1,14 +1,18 @@
 #include <stdio.h>
 #include <math.h>
 #include <mpi.h>
+#include <stdlib.h>
+#include <time.h>
 
 #include "lib/macrologger.h"
 #include "poisson.hpp"
 
 
-Poisson::Poisson(double x0, double y0, double square_size, int grid_size)
-	: dots_per_proc(NULL) {
-	/* It is pretty important to initialize dots_per_proc and dots to NULL:
+Poisson::Poisson(double x0, double y0, double square_size, int grid_size,
+				 double (*_F)(double x, double y),
+				 double (*_Phi)(double x, double y))
+	: F(_F), Phi(_Phi), dots_per_proc(NULL) {
+	/* It is pretty important to initialize ptrs to NULL;
      * otherwise, unallocated, they will be freed in the destructor
      */
 	for (int i = 0; i < 2; i++ ) {
@@ -42,18 +46,20 @@ Poisson::Poisson(double x0, double y0, double square_size, int grid_size)
 	if (grid_size < proc_grid_size) {
 		throw PoissonException("Error: grid size must be >= proc grid size\n");
 	}
+	LOG_DEBUG_MASTER("Square starts at (%f, %f) of size %f, grid size %d\n",
+					 x0, y0, square_size, grid_size);
 	DistributeDots(grid_size);
 	CalculateDots(x0, y0, square_size, grid_size);
+	Solve();
 
 
-	LOG_DEBUG_MASTER("Square starts at (%f, %f) of size %f, grid size %d\n",
-		   x0, y0, square_size, grid_size);
 
 	/* To synchronize with unused processes */
 	MPI_Barrier(MPI_COMM_WORLD);
 }
 
-/* Find this processor's dots, namely, it sets dots_num[] and borders[].
+/* Find this processor's dots, namely, it sets dots_num[2], borders[4] and
+ * inner_dots_range[4].
  * Since everything is square, the distribution is symmetrical.
  * Returns -1, if this processor is not used.
  */
@@ -80,20 +86,26 @@ void Poisson::DistributeDots(int grid_size) {
 		borders[i] = (ranks[i % 2] == borders_rank_check[i]);
 	}
 
+	/* set inner_dots_range */
+	int dots_range[4] = {0, 0, dots_num[0], dots_num[1]};
+	int add_or_substract[4] = {1, 1, -1, -1};
+	for (int i = 0; i < 4; i++) {
+	    inner_dots_range[i] = dots_range[i] + add_or_substract[i] * borders[i];
+	}
+
 	LOG_DEBUG("My rank is %d, i.e. (%d , %d), I own %d x %d dots and right touching is %d\n",
 			  rank, ranks[0], ranks[1], dots_num[0], dots_num[1], borders[2]);
 }
 
-/* Calculate dots area this processor works on
+/* Calculate values of dots this processor works on
  * dots_per_proc and dots_num must be set at this point
+ * sets dots[2][]
  */
 void Poisson::CalculateDots(double x0, double y0, double square_size,
 						   int grid_size) {
-	printf("0000000000000000000000\n");
 	/* Grid step. Grid is uniform and symmetrical. */
 	double step = square_size / grid_size;
 	LOG_DEBUG_MASTER("Step is %f", step);
-	printf("AAAAAAAAAAAAAAAAAAAAAAAAA\n");
 	/* bottom left point of this processor working area */
 	double bottom_left[2] = {x0, y0};
 	for (int i = 0; i < 2; i++) {
@@ -102,28 +114,72 @@ void Poisson::CalculateDots(double x0, double y0, double square_size,
 		}
 	}
 
-	printf("BBBBBBBBBBBBBBBBBBBBBBBBBBBb\n");
 	/* now calculate the dots themselves */
 	for (int i = 0; i < 2; i++) {
 		dots[i] = new double[dots_num[i]];
-		if (rank == 2) {
-			printf("Allocated %p\n", (void*)dots[i]);
-		}
 		dots[i][0] = bottom_left[i];
 		for (int j = 1; j < dots_num[i]; j++) {
 			dots[i][j] += step;
 		}
 	}
-	printf("FFFFFFFFFFFFFFFFFFFFFFFF\n");
 
-	if (rank == 2) {
-		printf("X values of proc with rank 2:\n");
-		for (int i = 0; i < dots_num[0]; i++)
-			printf("%f ", dots[0][i]);
-		printf("\n");
-		printf("Y values of proc with rank 2:\n");
-		for (int i = 0; i < dots_num[1]; i++)
-			printf("%f ", dots[1][i]);
+	/* For debugging */
+	// if (rank == 0) {
+	// 	printf("X values of proc with rank 0:\n");
+	// 	for (int i = 0; i < dots_num[0]; i++)
+	// 		printf("%f ", dots[0][i]);
+	// 	printf("\n");
+	// 	printf("Y values of proc with rank 0:\n");
+	// 	for (int i = 0; i < dots_num[1]; i++)
+	// 		printf("%f ", dots[1][i]);
+	// 	printf("\n");
+	// }
+}
+
+/* Now, with dots distributed and calculated, run the solver */
+void Poisson::Solve() {
+	resid_matr = Matrix(dots_num[0], dots_num[1]);
+	sol_matr = Matrix(dots_num[0], dots_num[1]);
+	InitSolMatr();
+}
+
+/* We initialize sol_matr to Phi on the borders, and to random values in the
+ * inner dots.
+ */
+void Poisson::InitSolMatr() {
+	/* The borders. Each corner will be initialized twice, but that's not a
+	 * big deal and simplifies code a bit.
+	 */
+
+	int fixed_coord[4] = {0, 0, dots_num[0], dots_num[1]};
+	for (int r = 0; r < 4; r++) {
+		if (borders[r]) {
+			if (r % 2  == 0) { /* vertical border */
+				for (int j = 0; j < dots_num[1]; j++) {
+					sol_matr(fixed_coord[r], j) =
+						(*Phi)(dots[0][fixed_coord[r]], dots[1][j]);
+				}
+			}
+			else { /* horizontal border */
+				for (int i = 0; i < dots_num[0]; i++) {
+					sol_matr(i, fixed_coord[r]) =
+						(*Phi)(dots[0][i], dots[1][fixed_coord[r]]);
+				}
+			}
+		}
+	}
+
+	/* Inner part */
+	srand(time(NULL));
+	for (int i = inner_dots_range[0]; i < inner_dots_range[2]; i++)
+		for (int j = inner_dots_range[1]; j < inner_dots_range[3]; j++) {
+			sol_matr(i, j) = rand();
+		}
+
+	/* For debugging */
+	if (rank == 8) {
+		printf("sol values of proc with rank 8:\n");
+		sol_matr.Print();
 	}
 }
 
@@ -133,9 +189,6 @@ Poisson::~Poisson() {
 		delete[] dots_per_proc;
     for (int i = 0; i < 2; i++) {
 		if (dots[i]) {
-			if (rank == 2) {
-				printf("Not Freeing %p\n", (void*)dots[i]);
-			}
 			delete[] dots[i];
 		}
 	}

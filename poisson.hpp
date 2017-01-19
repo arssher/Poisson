@@ -20,9 +20,12 @@ private:
  * We index both processors (ranks[0], rank[1]) and dots indexes from the left
  * bottom corner, just like usual axis.
  * Class can be used only once, i.e. one instance -- one computation.
+ * I use class just as a scope for some global variables, for automatic
+ * destructor call and for virtual F and Phi.
  */
 class Poisson {
 private:
+	/* data describing grid of processors */
 	int rank; /* this processor MPI rank */
 	int size; /* total number of processors */
 	/* processors grid consists of proc_grid_size x proc_grid_size processors */
@@ -31,6 +34,7 @@ private:
 	/* this processor location on [x, y] axis, starting from 0 */
 	int ranks[2];
 
+	/* data describing grid of dots, global and for this processor */
 	/* Number of dots per process along either x or y axis,
      * array of proc_grid_size size.
      * dots_per_proc[i] = (how many x dots proc with ranks[0] = i has) =
@@ -43,18 +47,37 @@ private:
 	double *dots[2];
 	/* this processor touches the [left, bottom, right, top] border? */
 	bool borders[4];
+    /* These 4 indexes (x_min, y_min, x_max, y_max) show range of inner dots
+	 * area part for this processor. In the simplest case, when the processor
+	 * doesn't touch any borders, it will be (0, 0, dots_num[0], dots_num[1]).
+	 * If, for instance, it touches the right border and the bottom border, it
+	 * will be (0, 1, dots_num[0] - 1, dots_num[1])
+	 * We use it to avoid ugly '-1' and '+1' indexes while looping over
+	 * the inner part.
+	 */
+	int inner_dots_range[4];
+
+	/* residuals */
+	Matrix resid_matr;
+	/* solution, 'p' function in the manual */
+	Matrix sol_matr;
+
+
+	/* Right hand side of Poisson equation */
+	double (*F)(double x, double y);
+	/* boundary function */
+	double (*Phi)(double x, double y);
 
 	void DistributeDots(int grid_size);
 	void CalculateDots(double x0, double y0, double square_size, int grid_size);
+	void Solve();
+	void InitSolMatr();
 public:
    /* (x0, y0) and square_size define the square we are working on.
     * grid_size*grid_size is the total number of dots
     */
-	Poisson(double x0, double y0, double square_size, int grid_size);
+	Poisson(double x0, double y0, double square_size, int grid_size,
+			double (*_F)(double x, double y),
+			double (*_Phi)(double x, double y));
 	~Poisson();
-
-	/* Right hand side of Poisson equation */
-	virtual double F(double x, double y) const = 0;
-
-
 };
