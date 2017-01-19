@@ -35,6 +35,8 @@ private:
 	int ranks[2];
 
 	/* data describing grid of dots, global and for this processor */
+	/* Grid step. Grid is uniform and symmetrical. */
+	double step;
 	/* Number of dots per process along either x or y axis,
      * array of proc_grid_size size.
      * dots_per_proc[i] = (how many x dots proc with ranks[0] = i has) =
@@ -49,7 +51,7 @@ private:
 	bool borders[4];
     /* These 4 indexes (x_min, y_min, x_max, y_max) show range of inner dots
 	 * area part for this processor. Note that 'inner' here means globally
-	 * inner, not inner just for this processor! In the simplest case, when
+	 * inner, i.e. out of global border. In the simplest case, when
 	 * the processor doesn't touch any borders, it will be (0, 0, dots_num[0],
 	 * dots_num[1]).  If, for instance, it touches the right border and the
 	 * bottom border, it will be (0, 1, dots_num[0] - 1, dots_num[1]). We use
@@ -73,6 +75,10 @@ private:
 	void CalculateDots(double x0, double y0, double square_size, int grid_size);
 	void Solve();
 	void InitSolMatr();
+	void CalcResidMatr();
+	void ApplyLaplace(const Matrix &matr, Matrix &lap_matr);
+	double LaplaceFormula(double center, double left, double right,
+						  double bottom, double top);
 	void FillBorders(Matrix &matr, double (*filler)(double x, double y));
 public:
    /* (x0, y0) and square_size define the square we are working on.

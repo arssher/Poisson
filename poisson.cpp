@@ -3,6 +3,7 @@
 #include <mpi.h>
 #include <stdlib.h>
 #include <time.h>
+#include <assert.h>
 
 #include "lib/macrologger.h"
 #include "poisson.hpp"
@@ -62,7 +63,6 @@ Poisson::Poisson(double x0, double y0, double square_size, int grid_size,
 /* Find this processor's dots, namely, it sets dots_num[2], borders[4] and
  * inner_dots_range[4].
  * Since everything is square, the distribution is symmetrical.
- * Returns -1, if this processor is not used.
  */
 void Poisson::DistributeDots(int grid_size) {
 	dots_per_proc = new int[proc_grid_size]();
@@ -105,7 +105,7 @@ void Poisson::DistributeDots(int grid_size) {
 void Poisson::CalculateDots(double x0, double y0, double square_size,
 						   int grid_size) {
 	/* Grid step. Grid is uniform and symmetrical. */
-	double step = square_size / grid_size;
+	step = square_size / (grid_size - 1);
 	LOG_DEBUG_MASTER("Step is %f", step);
 	/* bottom left point of this processor working area */
 	double bottom_left[2] = {x0, y0};
@@ -120,21 +120,22 @@ void Poisson::CalculateDots(double x0, double y0, double square_size,
 		dots[i] = new double[dots_num[i]];
 		dots[i][0] = bottom_left[i];
 		for (int j = 1; j < dots_num[i]; j++) {
-			dots[i][j] += step;
+			dots[i][j] = dots[i][j - 1] + step;
 		}
 	}
 
 	/* For debugging */
-	// if (rank == 0) {
-	// 	printf("X values of proc with rank 0:\n");
-	// 	for (int i = 0; i < dots_num[0]; i++)
-	// 		printf("%f ", dots[0][i]);
-	// 	printf("\n");
-	// 	printf("Y values of proc with rank 0:\n");
-	// 	for (int i = 0; i < dots_num[1]; i++)
-	// 		printf("%f ", dots[1][i]);
-	// 	printf("\n");
-	// }
+	int deb_rank = 4;
+	if (rank == deb_rank) {
+		printf("X values of proc with rank %d:\n", deb_rank);
+		for (int i = 0; i < dots_num[0]; i++)
+			printf("%f ", dots[0][i]);
+		printf("\n");
+		printf("Y values of proc with rank %d:\n", deb_rank);
+		for (int i = 0; i < dots_num[1]; i++)
+			printf("%f ", dots[1][i]);
+		printf("\n");
+	}
 }
 
 /* Now, with dots distributed and calculated, run the solver */
@@ -142,6 +143,7 @@ void Poisson::Solve() {
 	resid_matr = Matrix(dots_num[0], dots_num[1]);
 	sol_matr = Matrix(dots_num[0], dots_num[1]);
 	InitSolMatr();
+	CalcResidMatr();
 }
 
 /* We initialize sol_matr to Phi on the borders, and to random values in the
@@ -159,13 +161,56 @@ void Poisson::InitSolMatr() {
 		}
 
 	/* For debugging */
-	int deb_rank = 8;
+	int deb_rank = 3;
 	if (rank == deb_rank) {
 		printf("sol values of proc with rank %d:\n", deb_rank);
 		sol_matr.Print();
 	}
 }
 
+/*
+ * Calculate residuals matr
+ */
+void Poisson::CalcResidMatr() {
+	FillBorders(resid_matr, &zero_filler); /* borders are zeroed */
+
+	ApplyLaplace(sol_matr, resid_matr);
+
+	/* For debugging */
+	int deb_rank = 3;
+	if (rank == deb_rank) {
+		printf("resid matr of proc with rank %d:\n", deb_rank);
+		resid_matr.Print();
+	}
+}
+
+
+/*
+ * Apply discrete Laplace operator to 'matr' and put the result to 'lap_matr'.
+ * Border values of 'lap_matr' not touched. Matrices must be already allocated
+ * with our usual working size (dots_num[0], dots_num[1]).
+ */
+void Poisson::ApplyLaplace(const Matrix &matr, Matrix &lap_matr) {
+	/* Inner values. I mean, locally inner; for now we doesn't care whether
+	 * the borders of this processor are global borders or not
+	 */
+	for (int i = 1; i < dots_num[0] - 1; i++)
+		for (int j = 1; j < dots_num[1] - 1; j++) {
+			lap_matr(i, j) = LaplaceFormula(matr(i, j), matr(i - 1, j),
+											matr(i + 1, j), matr(i, j - 1),
+											matr(i, j + 1));
+		}
+}
+
+/*
+ * Formula of Laplace discrete operator for one dot. Again, everything is
+ * square, grid is uniform, which simplifies things.
+ */
+double Poisson::LaplaceFormula(double center, double left, double right,
+							 double bottom, double top) {
+	double numerator = 4*center - left - right - bottom - top;
+	return numerator / (step*step);
+}
 
 /* Fill the (global) borders. Each corner will be set twice, but that's not a
  * big deal and simplifies code a bit.
