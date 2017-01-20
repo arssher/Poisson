@@ -90,12 +90,15 @@ static inline char *timenow();
 #define LOG_DEBUG_MASTER(message, args...) if (rank == 0) PRINTFUNCTION(LOG_FMT message NEWLINE, ## args)
 #else
 #define LOG_DEBUG(message, args...)
+#define LOG_DEBUG_MASTER(message, args...)
 #endif
 
 #if LOG_LEVEL >= INFO_LEVEL
 #define LOG_INFO(message, args...)      PRINTFUNCTION(LOG_FMT message NEWLINE, LOG_ARGS(INFO_TAG), ## args)
+#define LOG_INFO_MASTER(message, args...) if (rank == 0) PRINTFUNCTION(LOG_FMT message NEWLINE, ## args)
 #else
 #define LOG_INFO(message, args...)
+#define LOG_DEBUG_MASTER(message, args...)
 #endif
 
 #if LOG_LEVEL >= ERROR_LEVEL

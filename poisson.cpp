@@ -4,9 +4,14 @@
 #include <stdlib.h>
 #include <time.h>
 #include <assert.h>
+#include <algorithm>
 
 #include "lib/macrologger.h"
 #include "poisson.hpp"
+
+/* _Pragma usage example */
+#define OMP_PARA_INTERNAL _Pragma("omp parallel for")
+#define OMP_FOR OMP_PARA_INTERNAL for
 
 static double zero_filler(double x, double y) { return 0.0; };
 
@@ -57,11 +62,17 @@ Poisson::Poisson(double x0, double y0, double square_size, int grid_size,
 	}
 	LOG_DEBUG_MASTER("Square starts at (%f, %f) of size %f, grid size %d\n",
 					 x0, y0, square_size, grid_size);
-	DistributeDots(grid_size);
-	CalculateDots(x0, y0, square_size, grid_size);
-	Solve();
 
-
+	try {
+		DistributeDots(grid_size);
+		CalculateDots(x0, y0, square_size, grid_size);
+		Solve();
+	}
+	catch (PoissonException &e) {
+		/* To synchronize with unused processes */
+		MPI_Barrier(MPI_COMM_WORLD);
+		throw;
+	}
 
 	/* To synchronize with unused processes */
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -149,6 +160,7 @@ void Poisson::CalculateDots(double x0, double y0, double square_size,
 void Poisson::Solve() {
 	resid_matr = Matrix(dots_num[0], dots_num[1]);
 	sol_matr = Matrix(dots_num[0], dots_num[1]);
+	tmp_matr = Matrix(dots_num[0], dots_num[1]);
 
 	/* allocate send & recv buffers */
 	for (int i = 0; i < 4; i++) {
@@ -156,9 +168,33 @@ void Poisson::Solve() {
 		recv_buffers[i] = new double[dots_num[(i + 1) % 2]];
 	}
 	IsThisProcSendsFirst();
-
 	InitSolMatr();
+
+	for (int i = 0; i < 10; i++) {
+		double error = SteepDescentIteration();
+		LOG_INFO_MASTER("Steep descent iteration %d done, error %f", i, error);
+	}
+
+
+}
+
+/* One iteration of SteepDescent method. The result is in sol_matr.
+   Returns the error corresponding to max norm.
+ */
+double Poisson::SteepDescentIteration() {
+	double error = 0.0;
+	double new_sol_val;
+
 	CalcResidMatr();
+	double tau = CalcTauSteepDescent();
+	for (int i = 0; i < dots_num[0]; i++)
+		for (int j = 0; j < dots_num[1]; j++) {
+			new_sol_val = sol_matr(i, j) - tau * resid_matr(i, j);
+			error = std::max(error, fabs(sol_matr(i, j) - new_sol_val));
+			sol_matr(i, j) = new_sol_val;
+		}
+
+	return error;
 }
 
 /* We initialize sol_matr to Phi on the borders, and to random values in the
@@ -191,17 +227,19 @@ void Poisson::CalcResidMatr() {
 
 	ApplyLaplace(sol_matr, resid_matr);
 
-	/* For debugging */
-	int deb_rank = 3;
-	if (rank == deb_rank) {
-		printf("resid matr of proc with rank %d:\n", deb_rank);
-		resid_matr.Print();
-	}
-}
+	/* substact F(x, y) */
+	for (int i = inner_dots_range[0]; i < inner_dots_range[2]; i++)
+		for (int j = inner_dots_range[1]; j < inner_dots_range[3]; j++) {
+			resid_matr(i, j) -= (*F)(dots[0][i], dots[1][j]);
+		}
 
-/* _Pragma usage example */
-#define OMP_PARA_INTERNAL _Pragma("omp parallel for")
-#define OMP_FOR OMP_PARA_INTERNAL for
+	/* For debugging */
+	// int deb_rank = 3;
+	// if (rank == deb_rank) {
+	// 	printf("resid matr of proc with rank %d:\n", deb_rank);
+	// 	resid_matr.Print();
+	// }
+}
 
 #define LAPLACE_COMPUTE_BORDER(r, max_i, center_ind, left, right, bottom, top) do { \
 		if (!borders[r]) { \
@@ -339,14 +377,15 @@ void Poisson::SendDataOneDirection(int r, int buf_size, int *src_ranks,
 		if (!borders[(r + 2) % 4]) {
 			MPI_Recv(recv_buffers[r], buf_size, MPI_DOUBLE,
 					 src_ranks[r], MPI_ANY_TAG, comm, MPI_STATUS_IGNORE);
-			int deb_rank = 3;
-			if (rank == deb_rank) {
-				printf("Successfully got data on %d from %d:\n",
-					   deb_rank, src_ranks[r]);
-				for (int j = 0; j < buf_size; j++)
-					printf("%f ", recv_buffers[r][j]);
-				printf("\n_________________________\n");
-			}
+			/* for debug */
+			// int deb_rank = 3;
+			// if (rank == deb_rank) {
+			// 	printf("Successfully got data on %d from %d:\n",
+			// 		   deb_rank, src_ranks[r]);
+			// 	for (int j = 0; j < buf_size; j++)
+			// 		printf("%f ", recv_buffers[r][j]);
+			// 	printf("\n_________________________\n");
+			// }
 		}
 	}
 	MPI_Barrier(comm);
@@ -385,6 +424,19 @@ void Poisson::FillBorders(Matrix &matr, double (*filler)(double x, double y)) {
 	}
 }
 
+
+/* Calculate tau in steep descent method.
+ * resid_matr must be calculated at this point and tmp_matr allocated
+ */
+double Poisson::CalcTauSteepDescent() {
+	double numerator = resid_matr.ScalarProduct(resid_matr, step);
+	FillBorders(tmp_matr, &zero_filler); /* in principle this is not necessary */
+	ApplyLaplace(resid_matr, tmp_matr);
+	double denominator = tmp_matr.ScalarProduct(resid_matr, step);
+	if (fabs(denominator) < 10e-7)
+		throw PoissonException("Error: Denominator close to zero in CalcTauSteepDescent\n");
+	return numerator / denominator;
+}
 
 Poisson::~Poisson() {
 	if (dots_per_proc)

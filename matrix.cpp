@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include "assert.h"
 
 #include "matrix.hpp"
 
@@ -47,4 +48,17 @@ void Matrix::GetRow(int j, double *buf) {
 void Matrix::GetColumn(int i, double *buf) {
 	for (int q = 0; q < m; q++)
 		buf[q] = (*this)(i, q);
+}
+
+double Matrix::ScalarProduct(const Matrix &matr2, double step) const {
+	assert(n == matr2.n);
+	assert(m == matr2.m);
+
+	double sp = 0.0;
+	for (int i = 0; i < n; i++)
+		for (int j = 0; j < m; j++) {
+			sp += (*this)(i, j) * matr2(i, j) * step * step;
+		}
+
+	return sp;
 }

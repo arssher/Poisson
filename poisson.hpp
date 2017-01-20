@@ -58,6 +58,7 @@ private:
 	 * it to avoid ugly '-1' and '+1' indexes while looping over the inner
 	 * part.
 	 */
+	int inner_dots_range[4];
 	/* Send buffers for messages going to the left, bottom, right and top from
      * this processor.
 	 */
@@ -68,12 +69,15 @@ private:
 	double *recv_buffers[4];
 	/* we need to mark matrix in checkerboard order to avoid deadlocks */
 	bool send_first;
-	int inner_dots_range[4];
 
 	/* residuals */
 	Matrix resid_matr;
 	/* solution, 'p' function in the manual */
 	Matrix sol_matr;
+	/* Used in thau calculations. Store it here to avoid reallocating
+     * every time
+	 */
+	Matrix tmp_matr;
 
 
 	/* Right hand side of Poisson equation */
@@ -94,6 +98,8 @@ private:
 							  int *dest_ranks);
 	void IsThisProcSendsFirst();
 	void FillBorders(Matrix &matr, double (*filler)(double x, double y));
+	double CalcTauSteepDescent();
+	double SteepDescentIteration();
 public:
    /* (x0, y0) and square_size define the square we are working on.
     * grid_size*grid_size is the total number of dots
