@@ -65,6 +65,10 @@ Poisson::Poisson(double x0, double y0, double square_size, int grid_size,
 	LOG_DEBUG_MASTER("Square starts at (%f, %f) of size %f, grid size %d\n",
 					 x0, y0, square_size, grid_size);
 
+	time_t start;
+	if (rank == 0) {
+		start = time(NULL);
+	}
 	try {
 		DistributeDots(grid_size);
 		CalculateDots(x0, y0, square_size, grid_size);
@@ -75,6 +79,8 @@ Poisson::Poisson(double x0, double y0, double square_size, int grid_size,
 		MPI_Barrier(MPI_COMM_WORLD);
 		throw;
 	}
+	LOG_INFO_MASTER("It took me %.2f seconds to compute",
+					(double)(time(NULL) - start));
 
 	/* To synchronize with unused processes */
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -160,7 +166,7 @@ void Poisson::CalculateDots(double x0, double y0, double square_size,
 
 /* Now, with dots distributed and calculated, run the solver */
 void Poisson::Solve() {
-	double error;
+	double global_error;
 	resid_matr = Matrix(dots_num[0], dots_num[1]);
 	sol_matr = Matrix(dots_num[0], dots_num[1]);
 	tmp_matr = Matrix(dots_num[0], dots_num[1]);
@@ -174,23 +180,27 @@ void Poisson::Solve() {
 	InitSolMatr();
 
 	for (int i = 0; i < sdi_iterations; i++) {
-		error = SteepDescentIteration();
-		LOG_INFO_MASTER("Steep descent iteration %d done, error %f", i, error);
+		double local_error = SteepDescentIteration();
+		MPI_Allreduce(&local_error, &global_error, 1, MPI_DOUBLE, MPI_MAX,
+					  comm);
+		LOG_INFO_MASTER("Steep descent iteration %d done, error %f",
+						i, global_error);
 	}
 
 	/* Now run CGM until convergence */
 	/* CGM initialization: g(0) = resid(0) */
 	g_matr = resid_matr.DeepCopy();
 
-	error = eps + 1948;
+	global_error = eps + 1948;
 	int CGM_its = 0;
-	while (error > eps) {
-		error = CGMIteration();
-		LOG_INFO_MASTER("CGM iteration %d done, error %f", CGM_its, error);
+	while (global_error > eps) {
+		double local_error = CGMIteration();
+		MPI_Allreduce(&local_error, &global_error, 1, MPI_DOUBLE, MPI_MAX,
+					  comm);
+		LOG_INFO_MASTER("CGM iteration %d done, error %f", CGM_its, global_error);
 		CGM_its++;
-		// if (CGM_its > 0)
-			// break;
 	}
+	LOG_INFO_MASTER("Done! %d", 0);
 }
 
 /* One iteration of SteepDescent method. The result is in sol_matr.
@@ -471,10 +481,14 @@ void Poisson::FillBorders(Matrix &matr, double (*filler)(double x, double y)) {
  */
 double Poisson::CalcTauSteepDescent() {
 	double numerator = resid_matr.ScalarProduct(resid_matr, step);
+	LOG_DEBUG("Num of proc %d is %f", rank, numerator);
 
 	FillBorders(tmp_matr, &zero_filler); /* in principle this is not necessary */
 	ApplyLaplace(resid_matr, tmp_matr);
 	double denominator = tmp_matr.ScalarProduct(resid_matr, step);
+
+	SumTwoDoublesGlobally(numerator, denominator);
+	LOG_DEBUG_MASTER("Collected numberator %f", numerator);
 	if (fabs(denominator) < 10e-7)
 		throw PoissonException("Error: Denominator close to zero in CalcTauSteepDescent\n");
 	return numerator / denominator;
@@ -488,8 +502,11 @@ double Poisson::CalcAlphaCGM() {
 	ApplyLaplace(resid_matr, tmp_matr);
 	double numerator = tmp_matr.ScalarProduct(g_matr, step);
 
+
 	ApplyLaplace(g_matr, tmp_matr);
 	double denominator = tmp_matr.ScalarProduct(g_matr, step);
+
+	SumTwoDoublesGlobally(numerator, denominator);
 	if (fabs(denominator) < 10e-7)
 		throw PoissonException("Error: Denominator close to zero in CalcAlphaCGM\n");
 	return numerator / denominator;
@@ -504,10 +521,25 @@ double Poisson::CalcTauCGM() {
 	FillBorders(tmp_matr, &zero_filler); /* in principle this is not necessary */
 	ApplyLaplace(g_matr, tmp_matr);
 	double denominator = tmp_matr.ScalarProduct(g_matr, step);
+
+	SumTwoDoublesGlobally(numerator, denominator);
 	if (fabs(denominator) < 10e-7)
 		throw PoissonException("Error: Denominator close to zero in CalcTauCGM\n");
 
 	return numerator / denominator;
+}
+
+/* Does Allreduce for CalcTau and CalcAlpha. Receives local num and denom,
+ * sums them globally and saves the result in place
+ */
+void Poisson::SumTwoDoublesGlobally(double &numerator, double &denominator) {
+	double numer_denom_local[2] = { numerator, denominator };
+	double numer_denom_global[2];
+
+	MPI_Allreduce(numer_denom_local, numer_denom_global, 2, MPI_DOUBLE, MPI_SUM,
+				  comm);
+	numerator = numer_denom_global[0];
+	denominator = numer_denom_global[1];
 }
 
 Poisson::~Poisson() {

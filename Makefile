@@ -1,7 +1,20 @@
-CXX = mpicxx
-CPPFLAGS := $(CPPFLAGS) -D"LOG_LEVEL=$(LOG_LEVEL)" -g -O0 -std=gnu++98
-# CXX = mpixlcxx_r
-# CPPFLAGS := $(CPPFLAGS) -D"LOG_LEVEL=$(LOG_LEVEL)" -g -O0
+CPPFLAGS := $(CPPFLAGS)
+
+ifeq ($(MODE),release)
+   CPPFLAGS := $(CPPFLAGS) -D"LOG_LEVEL=2" -O3
+else
+   mode = debug
+   CPPFLAGS :=  $(CPPFLAGS) -D"LOG_LEVEL=3" -g -O0
+endif
+
+ifeq ($(COMPILER),ibm)
+   CXX := mpixlcxx_r
+else
+   # gcc 4.1.2 on BlueGene
+   CXX := mpicxx
+   CPPFLAGS := $(CPPFLAGS) -std=gnu++98
+endif
+
 
 all: main.cpp poisson.o
 	$(CXX) $(CPPFLAGS) main.cpp poisson.o matrix.o -o poisson

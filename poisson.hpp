@@ -108,6 +108,7 @@ private:
 	double CGMIteration();
 	double CalcAlphaCGM();
 	double CalcTauCGM();
+	void SumTwoDoublesGlobally(double &numerator, double &denominator);
 public:
    /* (x0, y0) and square_size define the square we are working on.
     * grid_size*grid_size is the total number of dots
