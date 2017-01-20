@@ -19,7 +19,8 @@ Poisson::Poisson(double x0, double y0, double square_size, int grid_size,
 				 int sdi_it,
 				 double (*_F)(double x, double y),
 				 double (*_Phi)(double x, double y))
-	: F(_F), Phi(_Phi), dots_per_proc(NULL), sdi_iterations(sdi_it) {
+	: F(_F), Phi(_Phi), dots_per_proc(NULL),
+	  sdi_iterations(sdi_it), eps(0.0001) {
 	/* It is pretty important to initialize ptrs to NULL;
      * otherwise, unallocated, they will be freed in the destructor
      */
@@ -159,6 +160,7 @@ void Poisson::CalculateDots(double x0, double y0, double square_size,
 
 /* Now, with dots distributed and calculated, run the solver */
 void Poisson::Solve() {
+	double error;
 	resid_matr = Matrix(dots_num[0], dots_num[1]);
 	sol_matr = Matrix(dots_num[0], dots_num[1]);
 	tmp_matr = Matrix(dots_num[0], dots_num[1]);
@@ -172,13 +174,27 @@ void Poisson::Solve() {
 	InitSolMatr();
 
 	for (int i = 0; i < sdi_iterations; i++) {
-		double error = SteepDescentIteration();
+		error = SteepDescentIteration();
 		LOG_INFO_MASTER("Steep descent iteration %d done, error %f", i, error);
+	}
+
+	/* Now run CGM until convergence */
+	/* CGM initialization: g(0) = resid(0) */
+	g_matr = resid_matr.DeepCopy();
+
+	error = eps + 1948;
+	int CGM_its = 0;
+	while (error > eps) {
+		error = CGMIteration();
+		LOG_INFO_MASTER("CGM iteration %d done, error %f", CGM_its, error);
+		CGM_its++;
+		// if (CGM_its > 0)
+			// break;
 	}
 }
 
 /* One iteration of SteepDescent method. The result is in sol_matr.
-   Returns the error corresponding to max norm.
+ * Returns the error corresponding to max norm.
  */
 double Poisson::SteepDescentIteration() {
 	double error = 0.0;
@@ -189,6 +205,31 @@ double Poisson::SteepDescentIteration() {
 	for (int i = 0; i < dots_num[0]; i++)
 		for (int j = 0; j < dots_num[1]; j++) {
 			new_sol_val = sol_matr(i, j) - tau * resid_matr(i, j);
+			error = std::max(error, fabs(sol_matr(i, j) - new_sol_val));
+			sol_matr(i, j) = new_sol_val;
+		}
+
+	return error;
+}
+
+/* One iteration of CGM method. The result is in sol_matr.
+ * Returns error corresponding to max norm.
+ */
+double Poisson::CGMIteration() {
+	double error = 0.0;
+	double new_sol_val;
+
+	CalcResidMatr();
+	double alpha = CalcAlphaCGM();
+	for (int i = 0; i < dots_num[0]; i++)
+		for (int j = 0; j < dots_num[1]; j++) {
+			g_matr(i, j) = resid_matr(i, j) - alpha * g_matr(i, j);
+		}
+	double tau = CalcTauCGM();
+
+	for (int i = 0; i < dots_num[0]; i++)
+		for (int j = 0; j < dots_num[1]; j++) {
+			new_sol_val = sol_matr(i, j) - tau * g_matr(i, j);
 			error = std::max(error, fabs(sol_matr(i, j) - new_sol_val));
 			sol_matr(i, j) = new_sol_val;
 		}
@@ -354,6 +395,7 @@ void Poisson::ExchangeData(const Matrix &matr) {
 		SendDataOneDirection(r, buf_size, src_ranks, dest_ranks);
 		send_first = !send_first;
 		SendDataOneDirection(r, buf_size, src_ranks, dest_ranks);
+		send_first = !send_first;
 	}
 }
 
@@ -429,12 +471,42 @@ void Poisson::FillBorders(Matrix &matr, double (*filler)(double x, double y)) {
  */
 double Poisson::CalcTauSteepDescent() {
 	double numerator = resid_matr.ScalarProduct(resid_matr, step);
+
 	FillBorders(tmp_matr, &zero_filler); /* in principle this is not necessary */
 	ApplyLaplace(resid_matr, tmp_matr);
 	double denominator = tmp_matr.ScalarProduct(resid_matr, step);
-	// LOG_INFO("denominator is %f", denominator);
 	if (fabs(denominator) < 10e-7)
 		throw PoissonException("Error: Denominator close to zero in CalcTauSteepDescent\n");
+	return numerator / denominator;
+}
+
+/* Calculate alpha in CGM method
+ * resid_matr must be calculated at this point and tmp_matr allocated
+ */
+double Poisson::CalcAlphaCGM() {
+	FillBorders(tmp_matr, &zero_filler); /* in principle this is not necessary */
+	ApplyLaplace(resid_matr, tmp_matr);
+	double numerator = tmp_matr.ScalarProduct(g_matr, step);
+
+	ApplyLaplace(g_matr, tmp_matr);
+	double denominator = tmp_matr.ScalarProduct(g_matr, step);
+	if (fabs(denominator) < 10e-7)
+		throw PoissonException("Error: Denominator close to zero in CalcAlphaCGM\n");
+	return numerator / denominator;
+}
+
+/* Calculate tau in CGM method.
+ * resid_matr and g_matr must be calculated at this point and tmp_matr allocated
+ */
+double Poisson::CalcTauCGM() {
+	double numerator = resid_matr.ScalarProduct(g_matr, step);
+
+	FillBorders(tmp_matr, &zero_filler); /* in principle this is not necessary */
+	ApplyLaplace(g_matr, tmp_matr);
+	double denominator = tmp_matr.ScalarProduct(g_matr, step);
+	if (fabs(denominator) < 10e-7)
+		throw PoissonException("Error: Denominator close to zero in CalcTauCGM\n");
+
 	return numerator / denominator;
 }
 

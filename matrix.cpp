@@ -31,6 +31,16 @@ Matrix& Matrix::operator=(const Matrix &matr) {
 	return *this;
 }
 
+Matrix Matrix::DeepCopy() const {
+	Matrix matr(n, m);
+	for (int i = 0; i < n; i++)
+		for (int j = 0; j < m; j++) {
+			matr(i, j) = (*this)(i, j);
+		}
+
+	return matr;
+}
+
 void Matrix::Print() const {
 	for (int j = m - 1; j >= 0; j--) {
 		for (int i = 0; i < n; i++) {

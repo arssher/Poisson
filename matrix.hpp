@@ -8,6 +8,7 @@ public:
 	~Matrix();
 	Matrix(const Matrix &matr);
 	Matrix& operator=(const Matrix &matr);
+	Matrix DeepCopy() const;
 	/* return element on column i and row j */
 	double operator()(int i, int j) const { return data[j*n + i]; }
 	double& operator()(int i, int j) { return data[j*n + i]; }

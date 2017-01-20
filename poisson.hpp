@@ -78,8 +78,12 @@ private:
      * every time
 	 */
 	Matrix tmp_matr;
+	/* for CGM method */
+	Matrix g_matr;
 
+	/* algorithms params */
 	int sdi_iterations;
+	const double eps;
 
 	/* Right hand side of Poisson equation */
 	double (*F)(double x, double y);
@@ -101,6 +105,9 @@ private:
 	void FillBorders(Matrix &matr, double (*filler)(double x, double y));
 	double CalcTauSteepDescent();
 	double SteepDescentIteration();
+	double CGMIteration();
+	double CalcAlphaCGM();
+	double CalcTauCGM();
 public:
    /* (x0, y0) and square_size define the square we are working on.
     * grid_size*grid_size is the total number of dots
