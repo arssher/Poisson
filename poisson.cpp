@@ -168,7 +168,7 @@ void Poisson::InitSolMatr() {
 	FillBorders(sol_matr, Phi);
 
 	/* Inner part */
-	srand(time(NULL));
+	srand(time(NULL) + rank);
 	for (int i = inner_dots_range[0]; i < inner_dots_range[2]; i++)
 		for (int j = inner_dots_range[1]; j < inner_dots_range[3]; j++) {
 			/* not sure which values here are better */
@@ -176,7 +176,7 @@ void Poisson::InitSolMatr() {
 		}
 
 	/* For debugging */
-	int deb_rank = 5;
+	int deb_rank = 3;
 	if (rank == deb_rank) {
 		printf("sol values of proc with rank %d:\n", deb_rank);
 		sol_matr.Print();
@@ -192,14 +192,14 @@ void Poisson::CalcResidMatr() {
 	ApplyLaplace(sol_matr, resid_matr);
 
 	/* For debugging */
-	int deb_rank = 5;
+	int deb_rank = 3;
 	if (rank == deb_rank) {
 		printf("resid matr of proc with rank %d:\n", deb_rank);
 		resid_matr.Print();
 	}
 }
 
-
+/* _Pragma usage example */
 #define OMP_PARA_INTERNAL _Pragma("omp parallel for")
 #define OMP_FOR OMP_PARA_INTERNAL for
 
@@ -223,35 +223,60 @@ void Poisson::ApplyLaplace(const Matrix &matr, Matrix &lap_matr) {
 	 */
 	OMP_FOR (int i = 1; i < dots_num[0] - 1; i++)
 		for (int j = 1; j < dots_num[1] - 1; j++) {
-			lap_matr(i, j) = LaplaceFormula(matr(i, j), matr(i - 1, j),
-											matr(i + 1, j), matr(i, j - 1),
-											matr(i, j + 1));
+			lap_matr(i, j) = LaplaceFormula(matr(i, j),
+											matr(i - 1, j), matr(i + 1, j),
+											matr(i, j - 1), matr(i, j + 1));
 		}
 
 	/* fill recv_buffers */
 	ExchangeData(matr);
 
-	// /* now, the borders, without corners */
-	/* rbuf is 2 for r = 0, 0 for r = 2 */
+	/* now, the borders, without corners */
+	int max_x = dots_num[0] - 1;
+	int max_y = dots_num[1] - 1;
 	/* left border */
-	LAPLACE_COMPUTE_BORDER(0, dots_num[1] - 1, (0, i),
+	LAPLACE_COMPUTE_BORDER(0, max_y, (0, i),
 						   recv_buffers[2][i], matr(1, i),
 						   matr(0, i - 1), matr(0, i + 1));
 	/* bottom border */
-	LAPLACE_COMPUTE_BORDER(1, dots_num[0] - 1, (i, 0),
+	LAPLACE_COMPUTE_BORDER(1, max_x, (i, 0),
 						   matr(i - 1, 0), matr(i + 1, 0),
 						   recv_buffers[3][i], matr(i, 1));
 	/* right border */
-	int fixed_x = dots_num[0] - 1;
-	LAPLACE_COMPUTE_BORDER(2, dots_num[1] - 1, (fixed_x, i),
-						   matr(fixed_x - 1, i), recv_buffers[0][i],
-						   matr(fixed_x, i - 1), matr(fixed_x, i + 1));
+	LAPLACE_COMPUTE_BORDER(2, max_y, (max_x, i),
+						   matr(max_x - 1, i), recv_buffers[0][i],
+						   matr(max_x, i - 1), matr(max_x, i + 1));
 
 	/* top border */
-	int fixed_y = dots_num[1] - 1;
-	LAPLACE_COMPUTE_BORDER(3, dots_num[0] - 1, (i, fixed_y),
-						   matr(i - 1, fixed_y), matr(i + 1, fixed_y),
-						   matr(i, fixed_y - 1), recv_buffers[1][i]);
+	LAPLACE_COMPUTE_BORDER(3, max_x, (i, max_y),
+						   matr(i - 1, max_y), matr(i + 1, max_y),
+						   matr(i, max_y - 1), recv_buffers[1][i]);
+
+
+	/* and the corners */
+	if (!borders[0]) {
+		/* bottom left */
+		lap_matr(0, 0) = LaplaceFormula(matr(0, 0),
+										recv_buffers[2][0], matr(1, 0),
+										recv_buffers[3][0], matr(0, 1));
+		/* top left */
+		lap_matr(0, max_y) =
+			LaplaceFormula(matr(0, max_y),
+						   recv_buffers[2][max_y], matr(1, max_y),
+						   matr(0, max_y - 1), recv_buffers[1][0]);
+	}
+	if (!borders[2]) {
+		/* bottom right */
+		lap_matr(max_x, 0) =
+			LaplaceFormula(matr(max_x, 0),
+						   matr(max_x - 1, 0), recv_buffers[0][0],
+						   recv_buffers[3][max_x], matr(max_x, 1));
+		/* top right */
+		lap_matr(max_x, max_y) =
+			LaplaceFormula(matr(max_x, max_y),
+						   matr(max_x - 1, max_y), recv_buffers[0][max_y],
+						   matr(max_x, max_y - 1), recv_buffers[1][max_x]);
+	}
 
 }
 
@@ -292,9 +317,7 @@ void Poisson::ExchangeData(const Matrix &matr) {
 		SendDataOneDirection(r, buf_size, src_ranks, dest_ranks);
 		send_first = !send_first;
 		SendDataOneDirection(r, buf_size, src_ranks, dest_ranks);
-
 	}
-	/* barrier and repeat the same for the other half. */
 }
 
 /*
@@ -316,6 +339,14 @@ void Poisson::SendDataOneDirection(int r, int buf_size, int *src_ranks,
 		if (!borders[(r + 2) % 4]) {
 			MPI_Recv(recv_buffers[r], buf_size, MPI_DOUBLE,
 					 src_ranks[r], MPI_ANY_TAG, comm, MPI_STATUS_IGNORE);
+			int deb_rank = 3;
+			if (rank == deb_rank) {
+				printf("Successfully got data on %d from %d:\n",
+					   deb_rank, src_ranks[r]);
+				for (int j = 0; j < buf_size; j++)
+					printf("%f ", recv_buffers[r][j]);
+				printf("\n_________________________\n");
+			}
 		}
 	}
 	MPI_Barrier(comm);
