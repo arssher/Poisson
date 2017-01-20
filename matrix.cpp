@@ -27,6 +27,7 @@ Matrix& Matrix::operator=(const Matrix &matr) {
 	refcounter = matr.refcounter;
 	(*refcounter)++;
 	data = matr.data;
+	return *this;
 }
 
 void Matrix::Print() const {

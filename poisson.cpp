@@ -192,13 +192,25 @@ void Poisson::CalcResidMatr() {
 	ApplyLaplace(sol_matr, resid_matr);
 
 	/* For debugging */
-	// int deb_rank = 3;
-	// if (rank == deb_rank) {
-	// 	printf("resid matr of proc with rank %d:\n", deb_rank);
-	// 	resid_matr.Print();
-	// }
+	int deb_rank = 5;
+	if (rank == deb_rank) {
+		printf("resid matr of proc with rank %d:\n", deb_rank);
+		resid_matr.Print();
+	}
 }
 
+
+#define OMP_PARA_INTERNAL _Pragma("omp parallel for")
+#define OMP_FOR OMP_PARA_INTERNAL for
+
+#define LAPLACE_COMPUTE_BORDER(r, max_i, center_ind, left, right, bottom, top) do { \
+		if (!borders[r]) { \
+			for(int i = 1; i < max_i; i++) { \
+				lap_matr center_ind = \
+					LaplaceFormula(matr center_ind, left, right, bottom, top); \
+			} \
+		} \
+	} while (0)
 
 /*
  * Apply discrete Laplace operator to 'matr' and put the result to 'lap_matr'.
@@ -209,14 +221,38 @@ void Poisson::ApplyLaplace(const Matrix &matr, Matrix &lap_matr) {
 	/* Inner values. I mean, locally inner; for now we doesn't care whether
 	 * the borders of this processor are global borders or not
 	 */
-	for (int i = 1; i < dots_num[0] - 1; i++)
+	OMP_FOR (int i = 1; i < dots_num[0] - 1; i++)
 		for (int j = 1; j < dots_num[1] - 1; j++) {
 			lap_matr(i, j) = LaplaceFormula(matr(i, j), matr(i - 1, j),
 											matr(i + 1, j), matr(i, j - 1),
 											matr(i, j + 1));
 		}
 
+	/* fill recv_buffers */
 	ExchangeData(matr);
+
+	// /* now, the borders, without corners */
+	/* rbuf is 2 for r = 0, 0 for r = 2 */
+	/* left border */
+	LAPLACE_COMPUTE_BORDER(0, dots_num[1] - 1, (0, i),
+						   recv_buffers[2][i], matr(1, i),
+						   matr(0, i - 1), matr(0, i + 1));
+	/* bottom border */
+	LAPLACE_COMPUTE_BORDER(1, dots_num[0] - 1, (i, 0),
+						   matr(i - 1, 0), matr(i + 1, 0),
+						   recv_buffers[3][i], matr(i, 1));
+	/* right border */
+	int fixed_x = dots_num[0] - 1;
+	LAPLACE_COMPUTE_BORDER(2, dots_num[1] - 1, (fixed_x, i),
+						   matr(fixed_x - 1, i), recv_buffers[0][i],
+						   matr(fixed_x, i - 1), matr(fixed_x, i + 1));
+
+	/* top border */
+	int fixed_y = dots_num[1] - 1;
+	LAPLACE_COMPUTE_BORDER(3, dots_num[0] - 1, (i, fixed_y),
+						   matr(i - 1, fixed_y), matr(i + 1, fixed_y),
+						   matr(i, fixed_y - 1), recv_buffers[1][i]);
+
 }
 
 /*
@@ -231,6 +267,8 @@ double Poisson::LaplaceFormula(double center, double left, double right,
 
 /*
  * Exchange data with 4 neighbors needed for Laplace operator.
+ * It takes every local border of 'matr' and if it is not a global border,
+ * sends it to neighbors; data is put to recv_buffers.
  * send_buffer, recv_buffers must be allocated.
  * I think that we could get on with less buffers, but who cares.
  */
@@ -271,15 +309,6 @@ void Poisson::SendDataOneDirection(int r, int buf_size, int *src_ranks,
 		if (!borders[r]) {
 			MPI_Send(send_buffers[r], buf_size, MPI_DOUBLE,
 					 dest_ranks[r], 0, comm);
-			/* for debugging */
-			int deb_rank = 5;
-			if (rank == deb_rank) {
-				printf("Successfully sent data from %d to %d;\n",
-					   rank, dest_ranks[r]);
-				for (int j = 0; j < buf_size; j++)
-					printf("%f ", send_buffers[r][j]);
-				printf("\n-------------------------\n");
-			}
 		}
 	}
 	else {
@@ -287,14 +316,6 @@ void Poisson::SendDataOneDirection(int r, int buf_size, int *src_ranks,
 		if (!borders[(r + 2) % 4]) {
 			MPI_Recv(recv_buffers[r], buf_size, MPI_DOUBLE,
 					 src_ranks[r], MPI_ANY_TAG, comm, MPI_STATUS_IGNORE);
-			int deb_rank = 8;
-			if (rank == deb_rank) {
-				printf("Successfully got data on %d from %d:\n",
-					   deb_rank, src_ranks[r]);
-				for (int j = 0; j < buf_size; j++)
-					printf("%f ", recv_buffers[r][j]);
-				printf("\n_________________________\n");
-			}
 		}
 	}
 	MPI_Barrier(comm);
