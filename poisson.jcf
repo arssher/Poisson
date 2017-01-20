@@ -5,4 +5,4 @@
 # @ wall_clock_limit = 00:05:00
 # @ bg_size = 32
 # @ queue
-/bgsys/drivers/ppcfloor/bin/mpirun -exe /gpfs/data/edu-cmc-stud16-628-06/task2/poisson -mode VN -args "2 1 9 10" -n 12
+/bgsys/drivers/ppcfloor/bin/mpirun -exe /gpfs/data/edu-cmc-stud16-628-06/task2/poisson -mode VN -args "2 1 9 10" -n 11

@@ -132,17 +132,17 @@ void Poisson::CalculateDots(double x0, double y0, double square_size,
 	}
 
 	/* For debugging */
-	int deb_rank = 4;
-	if (rank == deb_rank) {
-		printf("X values of proc with rank %d:\n", deb_rank);
-		for (int i = 0; i < dots_num[0]; i++)
-			printf("%f ", dots[0][i]);
-		printf("\n");
-		printf("Y values of proc with rank %d:\n", deb_rank);
-		for (int i = 0; i < dots_num[1]; i++)
-			printf("%f ", dots[1][i]);
-		printf("\n");
-	}
+	// int deb_rank = 4;
+	// if (rank == deb_rank) {
+	// 	printf("X values of proc with rank %d:\n", deb_rank);
+	// 	for (int i = 0; i < dots_num[0]; i++)
+	// 		printf("%f ", dots[0][i]);
+	// 	printf("\n");
+	// 	printf("Y values of proc with rank %d:\n", deb_rank);
+	// 	for (int i = 0; i < dots_num[1]; i++)
+	// 		printf("%f ", dots[1][i]);
+	// 	printf("\n");
+	// }
 }
 
 /* Now, with dots distributed and calculated, run the solver */
@@ -155,6 +155,7 @@ void Poisson::Solve() {
 		send_buffers[i] = new double[dots_num[(i + 1) % 2]];
 		recv_buffers[i] = new double[dots_num[(i + 1) % 2]];
 	}
+	IsThisProcSendsFirst();
 
 	InitSolMatr();
 	CalcResidMatr();
@@ -175,7 +176,7 @@ void Poisson::InitSolMatr() {
 		}
 
 	/* For debugging */
-	int deb_rank = 3;
+	int deb_rank = 2;
 	if (rank == deb_rank) {
 		printf("sol values of proc with rank %d:\n", deb_rank);
 		sol_matr.Print();
@@ -191,11 +192,11 @@ void Poisson::CalcResidMatr() {
 	ApplyLaplace(sol_matr, resid_matr);
 
 	/* For debugging */
-	int deb_rank = 3;
-	if (rank == deb_rank) {
-		printf("resid matr of proc with rank %d:\n", deb_rank);
-		resid_matr.Print();
-	}
+	// int deb_rank = 3;
+	// if (rank == deb_rank) {
+	// 	printf("resid matr of proc with rank %d:\n", deb_rank);
+	// 	resid_matr.Print();
+	// }
 }
 
 
@@ -230,20 +231,53 @@ double Poisson::LaplaceFormula(double center, double left, double right,
 
 /*
  * Exchange data with 4 neighbors needed for Laplace operator.
- *
+ * send_buffer, recv_buffers must be allocated.
+ * I think that we could get on with less buffers, but who cares.
  */
 void Poisson::ExchangeData(const Matrix &matr) {
+	/* prepare send_buffers */
+	for (int j = 0; j < dots_num[1]; j++) { /* vertical */
+		send_buffers[0][j] = matr(0, j);
+		send_buffers[2][j] = matr(dots_num[1] - 1, j);
+	}
+	for (int i = 0; i < dots_num[0]; i++) { /* horizontal */
+		send_buffers[1][i] = matr(i, 0);
+		send_buffers[3][i] = matr(dots_num[0] - 1, i);
+	}
 
+	// I will implement left->right for now
+	if (send_first) {
+		if (!borders[0]) {
+			MPI_Send(send_buffers[0], dots_num[1], MPI_DOUBLE, rank - 1,
+					 0, comm);
+			if (rank == 2) {
+				printf("Successfully sent data from 2 to 1;\n");
+			}
+		}
+	}
+	else {
+		if (!borders[2]) {
+			MPI_Recv(recv_buffers[0], dots_num[1], MPI_DOUBLE, rank + 1,
+					 MPI_ANY_TAG, comm, MPI_STATUS_IGNORE);
+			if (rank == 1) {
+				printf("Successfully got data from 2 on 1:\n");
+				for (int j = 0; j < dots_num[1]; j++)
+					printf("%f ", recv_buffers[0][j]);
+			}
+		}
+	}
+	/* barrier and repeat the same for the other half. */
 }
 
 /*
  * Determines whether this processor sends the data first, sets send_first
  */
-void Poisson::SendFirst() {
+void Poisson::IsThisProcSendsFirst() {
 	if (ranks[1] % 2 == 0)
 		send_first = ranks[0] % 2 == 0;
 	else
 		send_first = ranks[0] % 2 == 1;
+	LOG_DEBUG("Proc %d has send_first %d", rank, send_first);
 }
 
 /* Fill the (global) borders. Each corner will be set twice, but that's not a

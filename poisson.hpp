@@ -58,12 +58,12 @@ private:
 	 * it to avoid ugly '-1' and '+1' indexes while looping over the inner
 	 * part.
 	 */
-	/* send buffers for messages left->right, bottom->top, right->left,
-	 * top->bottom
+	/* Send buffers for messages going to the left, bottom, right and top from
+     * this processor.
 	 */
 	double *send_buffers[4];
-	/* receive buffers for messages left->right, bottom->top, right->left,
-	 * top->bottom
+	/* receive buffers for messages going from right, top, left, bottom to
+     * to this processor.
 	 */
 	double *recv_buffers[4];
 	/* we need to mark matrix in checkerboard order to avoid deadlocks */
@@ -90,7 +90,7 @@ private:
 	double LaplaceFormula(double center, double left, double right,
 						  double bottom, double top);
 	void ExchangeData(const Matrix &matr);
-	void SendFirst();
+	void IsThisProcSendsFirst();
 	void FillBorders(Matrix &matr, double (*filler)(double x, double y));
 public:
    /* (x0, y0) and square_size define the square we are working on.
