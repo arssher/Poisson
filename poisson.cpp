@@ -176,7 +176,7 @@ void Poisson::InitSolMatr() {
 		}
 
 	/* For debugging */
-	int deb_rank = 2;
+	int deb_rank = 5;
 	if (rank == deb_rank) {
 		printf("sol values of proc with rank %d:\n", deb_rank);
 		sol_matr.Print();
@@ -242,31 +242,62 @@ void Poisson::ExchangeData(const Matrix &matr) {
 	}
 	for (int i = 0; i < dots_num[0]; i++) { /* horizontal */
 		send_buffers[1][i] = matr(i, 0);
-		send_buffers[3][i] = matr(dots_num[0] - 1, i);
+		send_buffers[3][i] = matr(i, dots_num[0] - 1);
 	}
 
-	// I will implement left->right for now
+	int dest_ranks[4] = {rank - 1, rank - proc_grid_size, rank + 1, rank +
+						 proc_grid_size};
+	int src_ranks[4] = {rank + 1, rank + proc_grid_size, rank - 1, rank -
+						proc_grid_size};
+	for (int r = 0; r < 4; r++) {
+		int buf_size = dots_num[(r + 1) % 2];
+		SendDataOneDirection(r, buf_size, src_ranks, dest_ranks);
+		send_first = !send_first;
+		SendDataOneDirection(r, buf_size, src_ranks, dest_ranks);
+
+	}
+	/* barrier and repeat the same for the other half. */
+}
+
+/*
+ * Working horse for ExchangeData, sends data in one direction from half
+ * of the nodes (with those having sends_first == true) to the other half
+ * r, index in arrays such as borders[4], sets the direction.
+ */
+void Poisson::SendDataOneDirection(int r, int buf_size, int *src_ranks,
+									int* dest_ranks) {
 	if (send_first) {
-		if (!borders[0]) {
-			MPI_Send(send_buffers[0], dots_num[1], MPI_DOUBLE, rank - 1,
-					 0, comm);
-			if (rank == 2) {
-				printf("Successfully sent data from 2 to 1;\n");
+		/* we send the data iff we have no global border on that side */
+		if (!borders[r]) {
+			MPI_Send(send_buffers[r], buf_size, MPI_DOUBLE,
+					 dest_ranks[r], 0, comm);
+			/* for debugging */
+			int deb_rank = 5;
+			if (rank == deb_rank) {
+				printf("Successfully sent data from %d to %d;\n",
+					   rank, dest_ranks[r]);
+				for (int j = 0; j < buf_size; j++)
+					printf("%f ", send_buffers[r][j]);
+				printf("\n-------------------------\n");
 			}
 		}
 	}
 	else {
-		if (!borders[2]) {
-			MPI_Recv(recv_buffers[0], dots_num[1], MPI_DOUBLE, rank + 1,
-					 MPI_ANY_TAG, comm, MPI_STATUS_IGNORE);
-			if (rank == 1) {
-				printf("Successfully got data from 2 on 1:\n");
-				for (int j = 0; j < dots_num[1]; j++)
-					printf("%f ", recv_buffers[0][j]);
+		/* and receive it iff we have no global border on the receiving side */
+		if (!borders[(r + 2) % 4]) {
+			MPI_Recv(recv_buffers[r], buf_size, MPI_DOUBLE,
+					 src_ranks[r], MPI_ANY_TAG, comm, MPI_STATUS_IGNORE);
+			int deb_rank = 8;
+			if (rank == deb_rank) {
+				printf("Successfully got data on %d from %d:\n",
+					   deb_rank, src_ranks[r]);
+				for (int j = 0; j < buf_size; j++)
+					printf("%f ", recv_buffers[r][j]);
+				printf("\n_________________________\n");
 			}
 		}
 	}
-	/* barrier and repeat the same for the other half. */
+	MPI_Barrier(comm);
 }
 
 /*
@@ -277,7 +308,6 @@ void Poisson::IsThisProcSendsFirst() {
 		send_first = ranks[0] % 2 == 0;
 	else
 		send_first = ranks[0] % 2 == 1;
-	LOG_DEBUG("Proc %d has send_first %d", rank, send_first);
 }
 
 /* Fill the (global) borders. Each corner will be set twice, but that's not a

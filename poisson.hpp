@@ -90,6 +90,8 @@ private:
 	double LaplaceFormula(double center, double left, double right,
 						  double bottom, double top);
 	void ExchangeData(const Matrix &matr);
+	void SendDataOneDirection(int r, int buf_size, int* src_ranks,
+							  int *dest_ranks);
 	void IsThisProcSendsFirst();
 	void FillBorders(Matrix &matr, double (*filler)(double x, double y));
 public:
