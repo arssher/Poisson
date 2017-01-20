@@ -1,21 +1,27 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 #include <mpi.h>
 #include <exception>
 
 #include "lib/macrologger.h"
 #include "poisson.hpp"
 
-double F(double x, double y)  { return 23.2; }
-double Phi(double x, double y)  { return 42.3; }
+double FTest(double x, double y)  { return 20; }
+double PhiTest(double x, double y)  { return 42.3; }
+
+double F2(double x, double y)  { return (x*x + y*y) * sin(x * y); }
+double Phi2(double x, double y)  { return 1 + sin(x * y); }
 
 int main(int argc, char** argv) {
 	MPI_Init(&argc,&argv);
 
-	if (argc != 5) {
-		printf("Usage: './poisson x0 y0 l m' where (x0, y0) is the left"
-               "bottom corner of the square, l is the square size and"
-               "m*m is the number of dots, so m is grid size.");
+	if (argc != 6) {
+		printf("Usage: './poisson x0 y0 l m sdi' where\n"
+               "(x0, y0) is the left bottom corner of the square\n"
+			   "l is the square size\n"
+               "m*m is the number of dots, so m is grid size\n"
+			   "sdi is number of steep descent iterations");
 		return -1;
 	}
 
@@ -23,9 +29,11 @@ int main(int argc, char** argv) {
 	double y0 = atof(argv[2]);
     double square_size = atof(argv[3]);
 	int grid_size = atoi(argv[4]);
+	int sdi_iterations = atoi(argv[5]);
 
 	try {
-		Poisson poiss(x0, y0, square_size, grid_size, &F, &Phi);
+		Poisson poiss(x0, y0, square_size, grid_size, sdi_iterations,
+					  &F2, &Phi2);
 	}
 	catch (std::exception &e) {
 		fprintf(stderr, "%s\n", e.what());

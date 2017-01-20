@@ -79,6 +79,7 @@ private:
 	 */
 	Matrix tmp_matr;
 
+	int sdi_iterations;
 
 	/* Right hand side of Poisson equation */
 	double (*F)(double x, double y);
@@ -105,6 +106,7 @@ public:
     * grid_size*grid_size is the total number of dots
     */
 	Poisson(double x0, double y0, double square_size, int grid_size,
+		    int sdi_it,
 			double (*_F)(double x, double y),
 			double (*_Phi)(double x, double y));
 	~Poisson();

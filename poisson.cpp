@@ -16,9 +16,10 @@
 static double zero_filler(double x, double y) { return 0.0; };
 
 Poisson::Poisson(double x0, double y0, double square_size, int grid_size,
+				 int sdi_it,
 				 double (*_F)(double x, double y),
 				 double (*_Phi)(double x, double y))
-	: F(_F), Phi(_Phi), dots_per_proc(NULL) {
+	: F(_F), Phi(_Phi), dots_per_proc(NULL), sdi_iterations(sdi_it) {
 	/* It is pretty important to initialize ptrs to NULL;
      * otherwise, unallocated, they will be freed in the destructor
      */
@@ -170,12 +171,10 @@ void Poisson::Solve() {
 	IsThisProcSendsFirst();
 	InitSolMatr();
 
-	for (int i = 0; i < 10; i++) {
+	for (int i = 0; i < sdi_iterations; i++) {
 		double error = SteepDescentIteration();
 		LOG_INFO_MASTER("Steep descent iteration %d done, error %f", i, error);
 	}
-
-
 }
 
 /* One iteration of SteepDescent method. The result is in sol_matr.
@@ -212,11 +211,11 @@ void Poisson::InitSolMatr() {
 		}
 
 	/* For debugging */
-	int deb_rank = 3;
-	if (rank == deb_rank) {
-		printf("sol values of proc with rank %d:\n", deb_rank);
-		sol_matr.Print();
-	}
+	// int deb_rank = 3;
+	// if (rank == deb_rank) {
+	// 	printf("sol values of proc with rank %d:\n", deb_rank);
+	// 	sol_matr.Print();
+	// }
 }
 
 /*
@@ -433,6 +432,7 @@ double Poisson::CalcTauSteepDescent() {
 	FillBorders(tmp_matr, &zero_filler); /* in principle this is not necessary */
 	ApplyLaplace(resid_matr, tmp_matr);
 	double denominator = tmp_matr.ScalarProduct(resid_matr, step);
+	// LOG_INFO("denominator is %f", denominator);
 	if (fabs(denominator) < 10e-7)
 		throw PoissonException("Error: Denominator close to zero in CalcTauSteepDescent\n");
 	return numerator / denominator;
