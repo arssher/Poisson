@@ -1,0 +1,24 @@
+# requires the following variables to be set:
+# dataf, outf, tit, zl
+
+# set terminal wxt
+set terminal pdf
+set output outf
+
+# angle of view
+set view 50, 205
+set title tit
+set xlabel "x"
+set ylabel "y"
+set zlabel zl
+
+# z from zero
+set ticslevel 0
+
+set pm3d implicit at s
+set pm3d scansforward
+
+# title '' disables showing filename on the plot
+splot dataf title '' w lines palette
+
+# pause -1
