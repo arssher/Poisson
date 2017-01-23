@@ -1,4 +1,8 @@
 core.*
+core
+res/
+*.pdf
+*.data
 poisson.out
 poisson.err
 poisson

@@ -90,6 +90,8 @@ private:
 	/* boundary function */
 	double (*Phi)(double x, double y);
 
+	char *dump_dir;
+
 	void DistributeDots(int grid_size);
 	void CalculateDots(double x0, double y0, double square_size, int grid_size);
 	void Solve();
@@ -109,6 +111,7 @@ private:
 	double CalcAlphaCGM();
 	double CalcTauCGM();
 	void SumTwoDoublesGlobally(double &numerator, double &denominator);
+	void DumpSolution();
 public:
    /* (x0, y0) and square_size define the square we are working on.
     * grid_size*grid_size is the total number of dots
@@ -116,6 +119,7 @@ public:
 	Poisson(double x0, double y0, double square_size, int grid_size,
 		    int sdi_it,
 			double (*_F)(double x, double y),
-			double (*_Phi)(double x, double y));
+			double (*_Phi)(double x, double y),
+			char *dump_d = NULL);
 	~Poisson();
 };

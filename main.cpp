@@ -13,15 +13,20 @@ double PhiTest(double x, double y)  { return 42.3; }
 double F2(double x, double y)  { return (x*x + y*y) * sin(x * y); }
 double Phi2(double x, double y)  { return 1 + sin(x * y); }
 
+double FN(double x, double y)  { return (x*x + y*y) / ((1 + x*y) * (1 + x*y));}
+double PhiN(double x, double y)  { return log(1 + x*y); }
+
 int main(int argc, char** argv) {
 	MPI_Init(&argc,&argv);
 
-	if (argc != 6) {
-		printf("Usage: './poisson x0 y0 l m sdi' where\n"
+	if (argc < 6) {
+		printf("Usage: './poisson x0 y0 l m sdi [dump]' where\n"
                "(x0, y0) is the left bottom corner of the square\n"
 			   "l is the square size\n"
                "m*m is the number of dots, so m is grid size\n"
-			   "sdi is number of steep descent iterations");
+			   "sdi is number of steep descent iterations\n"
+			   "dump the solution to [dump] directory. Dump is not performed"
+			   "if the argument if absent");
 		return -1;
 	}
 
@@ -30,10 +35,13 @@ int main(int argc, char** argv) {
     double square_size = atof(argv[3]);
 	int grid_size = atoi(argv[4]);
 	int sdi_iterations = atoi(argv[5]);
+	char *dump_dir = NULL;
+	if (argc >= 7)
+		dump_dir = argv[6];
 
 	try {
 		Poisson poiss(x0, y0, square_size, grid_size, sdi_iterations,
-					  &F2, &Phi2);
+					  &F2, &Phi2, dump_dir);
 	}
 	catch (std::exception &e) {
 		fprintf(stderr, "%s\n", e.what());
@@ -42,28 +50,4 @@ int main(int argc, char** argv) {
 
 	MPI_Finalize();
 	return 0;
-
-    // Initialize the MPI environment
-    // MPI_Init(NULL, NULL);
-
-    // // Get the number of processes
-    // int world_size;
-    // MPI_Comm_size(MPI_COMM_WORLD, &world_size);
-
-    // // Get the rank of the process
-    // int world_rank;
-    // MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
-
-    // // Get the name of the processor
-    // char processor_name[MPI_MAX_PROCESSOR_NAME];
-    // int name_len;
-    // MPI_Get_processor_name(processor_name, &name_len);
-
-    // // Print off a hello world message
-    // printf("Hello world from processor %s, rank %d"
-    //        " out of %d processors\n",
-    //        processor_name, world_rank, world_size);
-
-    // // Finalize the MPI environment.
-    // MPI_Finalize();
 }

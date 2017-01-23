@@ -24,3 +24,4 @@ poisson.o: matrix.o
 .PHONE: clean
 clean:
 	- rm matrix.o poisson.o poisson
+	- rm -rf res/

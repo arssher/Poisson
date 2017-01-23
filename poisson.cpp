@@ -5,6 +5,11 @@
 #include <time.h>
 #include <assert.h>
 #include <algorithm>
+#include <sstream>
+
+
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include "lib/macrologger.h"
 #include "poisson.hpp"
@@ -18,9 +23,10 @@ static double zero_filler(double x, double y) { return 0.0; };
 Poisson::Poisson(double x0, double y0, double square_size, int grid_size,
 				 int sdi_it,
 				 double (*_F)(double x, double y),
-				 double (*_Phi)(double x, double y))
+				 double (*_Phi)(double x, double y),
+				 char *dump_d)
 	: F(_F), Phi(_Phi), dots_per_proc(NULL),
-	  sdi_iterations(sdi_it), eps(0.0001) {
+	  sdi_iterations(sdi_it), eps(0.0001), dump_dir(dump_d) {
 	/* It is pretty important to initialize ptrs to NULL;
      * otherwise, unallocated, they will be freed in the destructor
      */
@@ -37,9 +43,9 @@ Poisson::Poisson(double x0, double y0, double square_size, int grid_size,
 	LOG_DEBUG_MASTER("Size is %d\n", size);
 
 	/* define processors grid and block unneeded processors */
-	if (size < 4) {
-		throw PoissonException("Error: we require at least 4 processors");
-	}
+	// if (size < 4) {
+		// throw PoissonException("Error: we require at least 4 processors");
+	// }
 	proc_grid_size = static_cast<int>(floor(sqrt(size)));
 	LOG_DEBUG_MASTER("Proc grid size is %d\n", proc_grid_size);
 
@@ -81,6 +87,9 @@ Poisson::Poisson(double x0, double y0, double square_size, int grid_size,
 	}
 	LOG_INFO_MASTER("It took me %.2f seconds to compute",
 					(double)(time(NULL) - start));
+
+	if (dump_dir)
+		DumpSolution();
 
 	/* To synchronize with unused processes */
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -258,7 +267,8 @@ void Poisson::InitSolMatr() {
 	for (int i = inner_dots_range[0]; i < inner_dots_range[2]; i++)
 		for (int j = inner_dots_range[1]; j < inner_dots_range[3]; j++) {
 			/* not sure which values here are better */
-			sol_matr(i, j) = rand() % 4096;
+			// sol_matr(i, j) = (rand() % 4096 )/ 4096.0;
+			sol_matr(i, j) = 0.0;
 		}
 
 	/* For debugging */
@@ -540,6 +550,34 @@ void Poisson::SumTwoDoublesGlobally(double &numerator, double &denominator) {
 				  comm);
 	numerator = numer_denom_global[0];
 	denominator = numer_denom_global[1];
+}
+
+void Poisson::DumpSolution() {
+	assert(dump_dir);
+	LOG_DEBUG_MASTER("Starting dumping...%d", 0);
+
+	if (rank == 0) {
+		struct stat st = {0};
+		if (stat(dump_dir, &st) == -1) {
+			mkdir(dump_dir, 0700);
+		}
+	}
+	/* Wait until directory will be created */
+	MPI_Barrier(comm);
+
+	std::stringstream ss;
+	ss << dump_dir << "/solution." << rank << ".csv";
+	const char *fname = ss.str().c_str();
+
+	FILE *f = fopen(fname, "w");
+	if (f == NULL) {
+		throw PoissonException("Failed to open dump file");
+	}
+	for (int i = 0; i < dots_num[0]; i++)
+		for (int j = 0; j < dots_num[1]; j++) {
+			fprintf(f, "%f, %f, %f\n", dots[i], dots[j], sol_matr(i, j));
+		}
+	fclose(f);
 }
 
 Poisson::~Poisson() {

@@ -2,8 +2,19 @@
 # @ class = n128_m15
 # @ output = poisson.out
 # @ error = poisson.err
-# @ wall_clock_limit = 00:05:00
-# @ bg_size = 128
+# @ wall_clock_limit = 00:5:00
+# @ bg_size = 32
 # @ queue
-# /bgsys/drivers/ppcfloor/bin/mpirun -exe /gpfs/data/edu-cmc-stud16-628-06/task2/poisson -mode VN -args "0 0 2 500 1" -n 128
-/bgsys/drivers/ppcfloor/bin/mpirun -exe /gpfs/data/edu-cmc-stud16-628-06/task2/poisson -mode VN -args "0 0 2 1000 1" -n 128
+# /bgsys/drivers/ppcfloor/bin/mpirun -exe /gpfs/data/edu-cmc-stud16-628-06/task2/poisson -mode SMP -args "0 0 2 500 1" -n 128
+# /bgsys/drivers/ppcfloor/bin/mpirun -exe /gpfs/data/edu-cmc-stud16-628-06/task2/poisson -mode SMP -args "0 0 3 1000 1" -n 128
+# /bgsys/drivers/ppcfloor/bin/mpirun -exe /gpfs/data/edu-cmc-stud16-628-06/task2/poisson -mode SMP -args "0 0 2 2000 1" -n 128
+
+# broken stuff
+# /bgsys/drivers/ppcfloor/bin/mpirun -exe /gpfs/data/edu-cmc-stud16-628-06/task2/poisson -mode SMP -args "0 0 2 100 1" -n 10
+# /bgsys/drivers/ppcfloor/bin/mpirun -exe /gpfs/data/edu-cmc-stud16-628-06/task2/poisson -mode SMP -args "0 0 2 100 1" -n 36
+# /bgsys/drivers/ppcfloor/bin/mpirun -exe /gpfs/data/edu-cmc-stud16-628-06/task2/poisson -mode SMP -args "0 0 2 100 1" -n 49
+# /bgsys/drivers/ppcfloor/bin/mpirun -exe /gpfs/data/edu-cmc-stud16-628-06/task2/poisson -mode SMP -args "0 0 2 100 1" -n 64
+# /bgsys/drivers/ppcfloor/bin/mpirun -exe /gpfs/data/edu-cmc-stud16-628-06/task2/poisson -mode SMP -args "0 0 2 1000 1" -n 256
+
+# working stuff
+/bgsys/drivers/ppcfloor/bin/mpirun -exe /gpfs/data/edu-cmc-stud16-628-06/task2/poisson -mode SMP -args "0 0 2 20 1 res" -n 8
