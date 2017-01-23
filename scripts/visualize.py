@@ -18,11 +18,8 @@ def collect_data(res_dir):
             with open(f_path, "rb") as csvf:
                 freader = csv.reader(csvf, delimiter=',')
                 for row in freader:
-                    data.append(row)
+                    data.append([float(row[0]), float(row[1]), float(row[2])])
     return data
-
-def comparator(row1, row2):
-    return row1[0] < row2[0]
 
 def run_gnuplot(dataf, outf, tit, zl):
     if not path.exists("drawings"):
@@ -36,16 +33,16 @@ def run_gnuplot(dataf, outf, tit, zl):
 def draw_mine():
     fname = "mine.data"
     data = collect_data("res")
-    # we sort the data by x and insert newline when x changes so that gnuplot
+    # we sort the data by x and y and insert newline when x changes so that gnuplot
     # can distinguish lines
-    data.sort(cmp=comparator)
+    data_sorted = sorted(data, key=lambda row: (row[0], row[1]))
     prev_x = 42.0
     with open(fname, "w") as gpltf:
-        for row in data:
+        for row in data_sorted:
             if prev_x != row[0]:
                 prev_x = row[0]
                 gpltf.write("\n")
-            gpltf.write(str(row[0] + " " + str(row[1]) + " " + str(row[2]) + "\n"))
+            gpltf.write(str(row[0]) + " " + str(row[1]) + " " + str(row[2]) + "\n")
 
     run_gnuplot(fname, "mine_sol.pdf", "Incorrect solution", 'u(x, y)')
 

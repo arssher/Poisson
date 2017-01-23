@@ -160,17 +160,17 @@ void Poisson::CalculateDots(double x0, double y0, double square_size,
 	}
 
 	/* For debugging */
-	// int deb_rank = 4;
-	// if (rank == deb_rank) {
-	// 	printf("X values of proc with rank %d:\n", deb_rank);
-	// 	for (int i = 0; i < dots_num[0]; i++)
-	// 		printf("%f ", dots[0][i]);
-	// 	printf("\n");
-	// 	printf("Y values of proc with rank %d:\n", deb_rank);
-	// 	for (int i = 0; i < dots_num[1]; i++)
-	// 		printf("%f ", dots[1][i]);
-	// 	printf("\n");
-	// }
+	int deb_rank = 0;
+	if (rank == deb_rank) {
+		printf("X values of proc with rank %d:\n", deb_rank);
+		for (int i = 0; i < dots_num[0]; i++)
+			printf("%f ", dots[0][i]);
+		printf("\n");
+		printf("Y values of proc with rank %d:\n", deb_rank);
+		for (int i = 0; i < dots_num[1]; i++)
+			printf("%f ", dots[1][i]);
+		printf("\n");
+	}
 }
 
 /* Now, with dots distributed and calculated, run the solver */
@@ -188,6 +188,7 @@ void Poisson::Solve() {
 	IsThisProcSendsFirst();
 	InitSolMatr();
 
+	LOG_DEBUG_MASTER("Initial value of sol_matr(1, 1) is %f", sol_matr(1, 1));
 	for (int i = 0; i < sdi_iterations; i++) {
 		double local_error = SteepDescentIteration();
 		MPI_Allreduce(&local_error, &global_error, 1, MPI_DOUBLE, MPI_MAX,
@@ -221,6 +222,7 @@ double Poisson::SteepDescentIteration() {
 
 	CalcResidMatr();
 	double tau = CalcTauSteepDescent();
+	// LOG_DEBUG_MASTER("Tau is %f", tau);
 	for (int i = 0; i < dots_num[0]; i++)
 		for (int j = 0; j < dots_num[1]; j++) {
 			new_sol_val = sol_matr(i, j) - tau * resid_matr(i, j);
@@ -228,6 +230,11 @@ double Poisson::SteepDescentIteration() {
 			sol_matr(i, j) = new_sol_val;
 		}
 
+	int deb_rank = size >= 4 ? 3 : 0;
+	if (rank == deb_rank) {
+		printf("sol_matr of proc with rank %d:\n", deb_rank);
+		resid_matr.Print();
+	}
 	return error;
 }
 
@@ -253,6 +260,11 @@ double Poisson::CGMIteration() {
 			sol_matr(i, j) = new_sol_val;
 		}
 
+	int deb_rank = size >= 4 ? 3 : 0;
+	if (rank == deb_rank) {
+		printf("sol_matr of proc with rank %d:\n", deb_rank);
+		resid_matr.Print();
+	}
 	return error;
 }
 
@@ -287,6 +299,12 @@ void Poisson::CalcResidMatr() {
 
 	ApplyLaplace(sol_matr, resid_matr);
 
+	// int deb_rank = size >= 4 ? 2 : 0;
+	// if (rank == deb_rank) {
+	// 	printf("delta sol_matr of proc with rank %d:\n", deb_rank);
+	// 	resid_matr.Print();
+	// }
+
 	/* substact F(x, y) */
 	for (int i = inner_dots_range[0]; i < inner_dots_range[2]; i++)
 		for (int j = inner_dots_range[1]; j < inner_dots_range[3]; j++) {
@@ -294,7 +312,7 @@ void Poisson::CalcResidMatr() {
 		}
 
 	/* For debugging */
-	// int deb_rank = 3;
+	// deb_rank = size >= 4 ? 2 : 0;
 	// if (rank == deb_rank) {
 	// 	printf("resid matr of proc with rank %d:\n", deb_rank);
 	// 	resid_matr.Print();
@@ -350,31 +368,40 @@ void Poisson::ApplyLaplace(const Matrix &matr, Matrix &lap_matr) {
 						   matr(i - 1, max_y), matr(i + 1, max_y),
 						   matr(i, max_y - 1), recv_buffers[1][i]);
 
-
 	/* and the corners */
-	if (!borders[0]) {
+	if (!borders[0] && !borders[1])
 		/* bottom left */
 		lap_matr(0, 0) = LaplaceFormula(matr(0, 0),
 										recv_buffers[2][0], matr(1, 0),
 										recv_buffers[3][0], matr(0, 1));
+	if (!borders[0] && !borders[3])
 		/* top left */
 		lap_matr(0, max_y) =
 			LaplaceFormula(matr(0, max_y),
 						   recv_buffers[2][max_y], matr(1, max_y),
 						   matr(0, max_y - 1), recv_buffers[1][0]);
-	}
-	if (!borders[2]) {
+
+	if (!borders[2] && !borders[1])
 		/* bottom right */
 		lap_matr(max_x, 0) =
 			LaplaceFormula(matr(max_x, 0),
 						   matr(max_x - 1, 0), recv_buffers[0][0],
 						   recv_buffers[3][max_x], matr(max_x, 1));
+
+	if (!borders[2] && !borders[3])
 		/* top right */
 		lap_matr(max_x, max_y) =
 			LaplaceFormula(matr(max_x, max_y),
 						   matr(max_x - 1, max_y), recv_buffers[0][max_y],
 						   matr(max_x, max_y - 1), recv_buffers[1][max_x]);
-	}
+
+
+	// int deb_rank = size >= 4 ? 2 : 0;
+	// if (rank == deb_rank) {
+	// 	printf("part calc res matr of proc with rank %d:\n", deb_rank);
+	// 	lap_matr.Print();
+	// }
+
 
 }
 
@@ -493,12 +520,41 @@ double Poisson::CalcTauSteepDescent() {
 	double numerator = resid_matr.ScalarProduct(resid_matr, step);
 	LOG_DEBUG("Num of proc %d is %f", rank, numerator);
 
+	/* for debug */
+	if (size == 1) {
+		double sp0 = 0.0;
+		for (int i = 0; i < 5; i++)
+			for (int j = 0; j < 5; j++) {
+				sp0 += resid_matr(i, j) * resid_matr(i, j) * step * step;
+			}
+		LOG_DEBUG_MASTER("sp0 is %f", sp0);
+		double sp1 = 0.0;
+		for (int i = 5; i < 10; i++)
+			for (int j = 0; j < 5; j++) {
+				sp1 += resid_matr(i, j) * resid_matr(i, j) * step * step;
+			}
+		LOG_DEBUG_MASTER("sp1 is %f", sp1);
+		double sp2 = 0.0;
+		for (int i = 0; i < 5; i++)
+			for (int j = 5; j < 10; j++) {
+				sp2 += resid_matr(i, j) * resid_matr(i, j) * step * step;
+			}
+		LOG_DEBUG_MASTER("sp2 is %f", sp2);
+		double sp3 = 0.0;
+		for (int i = 5; i < 10; i++)
+			for (int j = 5; j < 10; j++) {
+				sp3 += resid_matr(i, j) * resid_matr(i, j) * step * step;
+			}
+		LOG_DEBUG_MASTER("sp3 is %f", sp3);
+	}
+
 	FillBorders(tmp_matr, &zero_filler); /* in principle this is not necessary */
 	ApplyLaplace(resid_matr, tmp_matr);
 	double denominator = tmp_matr.ScalarProduct(resid_matr, step);
 
 	SumTwoDoublesGlobally(numerator, denominator);
-	LOG_DEBUG_MASTER("Collected numberator %f", numerator);
+	LOG_DEBUG_MASTER("Collected numerator %f", numerator);
+	LOG_DEBUG_MASTER("Collected denominator %f", denominator);
 	if (fabs(denominator) < 10e-7)
 		throw PoissonException("Error: Denominator close to zero in CalcTauSteepDescent\n");
 	return numerator / denominator;
@@ -575,7 +631,7 @@ void Poisson::DumpSolution() {
 	}
 	for (int i = 0; i < dots_num[0]; i++)
 		for (int j = 0; j < dots_num[1]; j++) {
-			fprintf(f, "%f, %f, %f\n", dots[i], dots[j], sol_matr(i, j));
+			fprintf(f, "%f, %f, %f\n", dots[0][i], dots[1][j], sol_matr(i, j));
 		}
 	fclose(f);
 }
