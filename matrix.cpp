@@ -44,7 +44,7 @@ Matrix Matrix::DeepCopy() const {
 void Matrix::Print() const {
 	for (int j = m - 1; j >= 0; j--) {
 		for (int i = 0; i < n; i++) {
-			printf("%010.6lf ", (*this)(i, j));
+			printf("%019.17g  ", (*this)(i, j));
 		}
 		printf("\n");
 	}

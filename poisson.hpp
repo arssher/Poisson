@@ -64,9 +64,13 @@ private:
 	 */
 	double *send_buffers[4];
 	/* receive buffers for messages going from right, top, left, bottom to
-     * to this processor.
+     * to this processor
 	 */
 	double *recv_buffers[4];
+	/* just for debugging, to ensure that we have filled this buffer before
+     * accessing it
+	 */
+	bool recv_buffer_used[4];
 	/* we need to mark matrix in checkerboard order to avoid deadlocks */
 	bool send_first;
 
@@ -97,7 +101,7 @@ private:
 	void Solve();
 	void InitSolMatr();
 	void CalcResidMatr();
-	void ApplyLaplace(const Matrix &matr, Matrix &lap_matr, bool dbg);
+	void ApplyLaplace(const Matrix &matr, Matrix &lap_matr, bool dbg=false);
 	double LaplaceFormula(double center, double left, double right,
 						  double bottom, double top);
 	void ExchangeData(const Matrix &matr);
