@@ -141,12 +141,15 @@ void Poisson::CalculateDots(double x0, double y0, double square_size,
 						   int grid_size) {
 	/* Grid step. Grid is uniform and symmetrical. */
 	step = square_size / (grid_size - 1);
-	LOG_DEBUG_MASTER("Step is %f", step);
+	LOG_DEBUG_MASTER("Step is %.17g", step);
 	/* bottom left point of this processor working area */
 	double bottom_left[2] = {x0, y0};
-	for (int i = 0; i < 2; i++) {
-		for (int j = 0; j < ranks[i]; j++) {
-			bottom_left[i] += step*dots_per_proc[j];
+	for (int r = 0; r < 2; r++) {
+		for (int i = 0; i < ranks[r]; i++) {
+			/* fast, but not *very* exact method */
+			// bottom_left[r] += step*(dots_per_proc[i]);
+			for (int j = 0; j < dots_per_proc[i]; j++)
+				bottom_left[r] += step;
 		}
 	}
 
@@ -160,15 +163,65 @@ void Poisson::CalculateDots(double x0, double y0, double square_size,
 	}
 
 	/* For debugging */
+	// int deb_rank = 0;
+	// if (rank == deb_rank) {
+	// 	printf("X values of proc with rank %d:\n", deb_rank);
+	// 	for (int i = 0; i < dots_num[0]; i++)
+	// 		printf("%.17g ", dots[0][i]);
+	// 	printf("\n");
+	// 	printf("Y values of proc with rank %d:\n", deb_rank);
+	// 	for (int i = 0; i < dots_num[1]; i++)
+	// 		printf("%.17g ", dots[1][i]);
+	// 	printf("\n");
+	// }
+
 	int deb_rank = 0;
-	if (rank == deb_rank) {
+	if (size == 1 && rank == deb_rank) {
+		printf("0-33 X values of proc with rank %d:\n", deb_rank);
+		for (int i = 0; i < 34; i++)
+			printf("%.17g ", dots[0][i]);
+		printf("\n");
+		printf("34-65 X values of proc with rank %d:\n", deb_rank);
+		for (int i = 34; i < 66; i++)
+			printf("%.17g ", dots[0][i]);
+		printf("\n");
+		printf("66-99 X values of proc with rank %d:\n", deb_rank);
+		for (int i = 66; i < dots_num[0]; i++)
+			printf("%.17g ", dots[0][i]);
+		printf("\n");
+		printf("66-99 Y values of proc with rank %d:\n", deb_rank);
+		for (int i = 66; i < dots_num[1]; i++)
+			printf("%.17g ", dots[1][i]);
+		printf("\n");
+	}
+
+	deb_rank = 6;
+	if (size != 1 && rank == deb_rank) {
 		printf("X values of proc with rank %d:\n", deb_rank);
 		for (int i = 0; i < dots_num[0]; i++)
-			printf("%f ", dots[0][i]);
+			printf("%.17g ", dots[0][i]);
+		printf("\n");
+	}
+	MPI_Barrier(comm);
+
+	deb_rank = 7;
+	if (size != 1 && rank == deb_rank) {
+		printf("X values of proc with rank %d:\n", deb_rank);
+		for (int i = 0; i < dots_num[0]; i++)
+			printf("%.17g ", dots[0][i]);
+		printf("\n");
+	}
+	MPI_Barrier(comm);
+
+	deb_rank = 8;
+	if (size != 1 && rank == deb_rank) {
+		printf("X values of proc with rank %d:\n", deb_rank);
+		for (int i = 0; i < dots_num[0]; i++)
+			printf("%.17g ", dots[0][i]);
 		printf("\n");
 		printf("Y values of proc with rank %d:\n", deb_rank);
 		for (int i = 0; i < dots_num[1]; i++)
-			printf("%f ", dots[1][i]);
+			printf("%.17g ", dots[1][i]);
 		printf("\n");
 	}
 }
@@ -203,7 +256,7 @@ void Poisson::Solve() {
 
 	global_error = eps + 1948;
 	int CGM_its = 0;
-	while (global_error > eps) {
+	while (global_error > eps && CGM_its <= 6) {
 		double local_error = CGMIteration();
 		MPI_Allreduce(&local_error, &global_error, 1, MPI_DOUBLE, MPI_MAX,
 					  comm);
@@ -222,18 +275,23 @@ double Poisson::SteepDescentIteration() {
 
 	CalcResidMatr();
 	double tau = CalcTauSteepDescent();
-	// LOG_DEBUG_MASTER("Tau is %f", tau);
+	LOG_DEBUG_MASTER("SD Tau is %f", tau);
 	for (int i = 0; i < dots_num[0]; i++)
 		for (int j = 0; j < dots_num[1]; j++) {
 			new_sol_val = sol_matr(i, j) - tau * resid_matr(i, j);
+			if (i == 1 && j == 3) {
+				LOG_DEBUG_MASTER(
+					"Calculating sol_mat(1, 3), it is %.17g - %.17g*%.17g = %.17g",
+					sol_matr(i, j), tau, resid_matr(i, j), new_sol_val);
+			}
 			error = std::max(error, fabs(sol_matr(i, j) - new_sol_val));
 			sol_matr(i, j) = new_sol_val;
 		}
 
-	int deb_rank = size >= 4 ? 3 : 0;
+	int deb_rank = size >= 4 ? 8 : 0;
 	if (rank == deb_rank) {
-		printf("sol_matr of proc with rank %d:\n", deb_rank);
-		resid_matr.Print();
+		printf("SD iteration done. sol_matr of proc with rank %d:\n", deb_rank);
+		sol_matr.Print();
 	}
 	return error;
 }
@@ -247,11 +305,13 @@ double Poisson::CGMIteration() {
 
 	CalcResidMatr();
 	double alpha = CalcAlphaCGM();
+	LOG_DEBUG_MASTER("CGM alpha is %f", alpha);
 	for (int i = 0; i < dots_num[0]; i++)
 		for (int j = 0; j < dots_num[1]; j++) {
 			g_matr(i, j) = resid_matr(i, j) - alpha * g_matr(i, j);
 		}
 	double tau = CalcTauCGM();
+	LOG_DEBUG_MASTER("CGM tau is %f", tau);
 
 	for (int i = 0; i < dots_num[0]; i++)
 		for (int j = 0; j < dots_num[1]; j++) {
@@ -260,11 +320,11 @@ double Poisson::CGMIteration() {
 			sol_matr(i, j) = new_sol_val;
 		}
 
-	int deb_rank = size >= 4 ? 3 : 0;
-	if (rank == deb_rank) {
-		printf("sol_matr of proc with rank %d:\n", deb_rank);
-		resid_matr.Print();
-	}
+	// int deb_rank = size >= 4 ? 0 : 0;
+	// if (rank == deb_rank) {
+	// 	printf("sol_matr of proc with rank %d:\n", deb_rank);
+	// 	resid_matr.Print();
+	// }
 	return error;
 }
 
@@ -292,18 +352,27 @@ void Poisson::InitSolMatr() {
 }
 
 /*
- * Calculate residuals matr
+ * Calculate residuals matr, resid_matr = (delta sol_matr) - F
  */
 void Poisson::CalcResidMatr() {
+	static int callcount = 0;
+
+	int deb_rank = size >= 4 ? 8 : 0;
+	if (rank == deb_rank) {
+		printf("Calculating resid matr for the %d time. sol_matr of proc"
+			   " with rank %d:\n", callcount, deb_rank);
+		sol_matr.Print();
+	}
+
 	FillBorders(resid_matr, &zero_filler); /* borders are zeroed */
 
-	ApplyLaplace(sol_matr, resid_matr);
+	ApplyLaplace(sol_matr, resid_matr, true);
 
-	// int deb_rank = size >= 4 ? 2 : 0;
-	// if (rank == deb_rank) {
-	// 	printf("delta sol_matr of proc with rank %d:\n", deb_rank);
-	// 	resid_matr.Print();
-	// }
+	deb_rank = size >= 4 ? 8 : 0;
+	if (rank == deb_rank) {
+		printf("delta sol_matr of proc with rank %d:\n", deb_rank);
+		resid_matr.Print();
+	}
 
 	/* substact F(x, y) */
 	for (int i = inner_dots_range[0]; i < inner_dots_range[2]; i++)
@@ -311,8 +380,9 @@ void Poisson::CalcResidMatr() {
 			resid_matr(i, j) -= (*F)(dots[0][i], dots[1][j]);
 		}
 
+	callcount++;
 	/* For debugging */
-	// deb_rank = size >= 4 ? 2 : 0;
+	// deb_rank = size >= 4 ? 0 : 0;
 	// if (rank == deb_rank) {
 	// 	printf("resid matr of proc with rank %d:\n", deb_rank);
 	// 	resid_matr.Print();
@@ -333,15 +403,32 @@ void Poisson::CalcResidMatr() {
  * Border values of 'lap_matr' not touched. Matrices must be already allocated
  * with our usual working size (dots_num[0], dots_num[1]).
  */
-void Poisson::ApplyLaplace(const Matrix &matr, Matrix &lap_matr) {
+void Poisson::ApplyLaplace(const Matrix &matr, Matrix &lap_matr, bool dbg=false) {
 	/* Inner values. I mean, locally inner; for now we doesn't care whether
 	 * the borders of this processor are global borders or not
 	 */
-	OMP_FOR (int i = 1; i < dots_num[0] - 1; i++)
+	for (int i = 1; i < dots_num[0] - 1; i++)
 		for (int j = 1; j < dots_num[1] - 1; j++) {
+
 			lap_matr(i, j) = LaplaceFormula(matr(i, j),
 											matr(i - 1, j), matr(i + 1, j),
 											matr(i, j - 1), matr(i, j + 1));
+			if (size == 1 && i == 98 && j == 98) {
+				LOG_DEBUG_MASTER(
+					"Calculating delta_sol_matr(98, 98): it is"
+					"\nlapformul(%.17g, %.17g, %.17g, %.17g, %.17g) and equals %.17g",
+					matr(i, j),
+					matr(i - 1, j), matr(i + 1, j),
+					matr(i, j - 1), matr(i, j + 1),  lap_matr(i, j));
+			}
+			if (size != 1 && rank == 8 && i == 31 && j == 31) {
+				fprintf(stderr,
+					"My rank 8, calculating delta_sol_matr(98, 98): it is"
+					"\nlapformul(%.17g, %.17g, %.17g, %.17g, %.17g) and equals %.17g",
+					matr(i, j),
+					matr(i - 1, j), matr(i + 1, j),
+					matr(i, j - 1), matr(i, j + 1),  lap_matr(i, j));
+			}
 		}
 
 	/* fill recv_buffers */
@@ -506,6 +593,22 @@ void Poisson::FillBorders(Matrix &matr, double (*filler)(double x, double y)) {
 				for (int i = 0; i < dots_num[0]; i++) {
 					matr(i, fixed_coord[r]) =
 						(*filler)(dots[0][i], dots[1][fixed_coord[r]]);
+
+					/* for debug */
+					if (r == 3 && size == 1 && i == 98) {
+						LOG_DEBUG_MASTER(
+							"Filling top border matr(%d, %d) = "
+							"Phi(%.17g, %.17g) = %.17g",
+							i, fixed_coord[r], dots[0][i], dots[1][fixed_coord[r]],
+							matr(i, fixed_coord[r]));
+					}
+					if (r == 3 && size != 1 && rank == 8 && i == 31) {
+						fprintf(stderr,
+							"Filling top border of proc 8 with matr(%d, %d) = "
+							"Phi(%.17g, %.17g) = %.17g\n",
+							i, fixed_coord[r], dots[0][i], dots[1][fixed_coord[r]],
+							matr(i, fixed_coord[r]));
+					}
 				}
 			}
 		}
@@ -518,43 +621,45 @@ void Poisson::FillBorders(Matrix &matr, double (*filler)(double x, double y)) {
  */
 double Poisson::CalcTauSteepDescent() {
 	double numerator = resid_matr.ScalarProduct(resid_matr, step);
-	LOG_DEBUG("Num of proc %d is %f", rank, numerator);
-
-	/* for debug */
-	if (size == 1) {
-		double sp0 = 0.0;
-		for (int i = 0; i < 5; i++)
-			for (int j = 0; j < 5; j++) {
-				sp0 += resid_matr(i, j) * resid_matr(i, j) * step * step;
-			}
-		LOG_DEBUG_MASTER("sp0 is %f", sp0);
-		double sp1 = 0.0;
-		for (int i = 5; i < 10; i++)
-			for (int j = 0; j < 5; j++) {
-				sp1 += resid_matr(i, j) * resid_matr(i, j) * step * step;
-			}
-		LOG_DEBUG_MASTER("sp1 is %f", sp1);
-		double sp2 = 0.0;
-		for (int i = 0; i < 5; i++)
-			for (int j = 5; j < 10; j++) {
-				sp2 += resid_matr(i, j) * resid_matr(i, j) * step * step;
-			}
-		LOG_DEBUG_MASTER("sp2 is %f", sp2);
-		double sp3 = 0.0;
-		for (int i = 5; i < 10; i++)
-			for (int j = 5; j < 10; j++) {
-				sp3 += resid_matr(i, j) * resid_matr(i, j) * step * step;
-			}
-		LOG_DEBUG_MASTER("sp3 is %f", sp3);
-	}
+	LOG_DEBUG("SD tau num of proc %d is %.17g", rank, numerator);
 
 	FillBorders(tmp_matr, &zero_filler); /* in principle this is not necessary */
 	ApplyLaplace(resid_matr, tmp_matr);
 	double denominator = tmp_matr.ScalarProduct(resid_matr, step);
+	LOG_DEBUG("SD tau denom of proc %d is %.17g", rank, denominator);
+
+	/* for debug */
+	if (size == 1) {
+		double sp0 = 0.0;
+		for (int i = 0; i < 34; i++) {
+			for (int j = 0; j < 34; j++) {
+				sp0 += resid_matr(i, j) * resid_matr(i, j) * step * step;
+			}
+		}
+		LOG_DEBUG_MASTER("Numer sp0 is %.17g", sp0);
+
+		int _dots_per_proc[3] = {34, 33, 33};
+		int _rank = 0;
+		int jj = 0;
+		for (int ranky = 0; ranky < 3; ranky++) {
+			int ii = 0;
+			for (int rankx = 0; rankx < 3; rankx++) {
+				double sp = 0.0;
+				for (int i = 0; i < _dots_per_proc[rankx]; i++)
+					for (int j = 0; j < _dots_per_proc[ranky]; j++) {
+						sp += resid_matr(ii + i, jj + j) * resid_matr(ii + i, jj + j) * step * step;
+					}
+				LOG_DEBUG_MASTER("Numer of proc %d is %.17g", _rank, sp);
+				_rank++;
+				ii += _dots_per_proc[rankx];
+			}
+			jj += _dots_per_proc[ranky];
+		}
+	}
 
 	SumTwoDoublesGlobally(numerator, denominator);
-	LOG_DEBUG_MASTER("Collected numerator %f", numerator);
-	LOG_DEBUG_MASTER("Collected denominator %f", denominator);
+	LOG_DEBUG_MASTER("Collected numerator %.17g", numerator);
+	LOG_DEBUG_MASTER("Collected denominator %.17g", denominator);
 	if (fabs(denominator) < 10e-7)
 		throw PoissonException("Error: Denominator close to zero in CalcTauSteepDescent\n");
 	return numerator / denominator;
@@ -568,11 +673,31 @@ double Poisson::CalcAlphaCGM() {
 	ApplyLaplace(resid_matr, tmp_matr);
 	double numerator = tmp_matr.ScalarProduct(g_matr, step);
 
+	int deb_rank = size >= 4 ? 0 : 0;
+	if (rank == deb_rank) {
+		printf("resid_matr of proc with rank %d:\n", deb_rank);
+	   resid_matr.Print();
+	}
+
+
+	deb_rank = size >= 4 ? 0 : 0;
+	if (rank == deb_rank) {
+		printf("delta resid_matr of proc with rank %d:\n", deb_rank);
+		tmp_matr.Print();
+	}
 
 	ApplyLaplace(g_matr, tmp_matr);
 	double denominator = tmp_matr.ScalarProduct(g_matr, step);
 
+	deb_rank = size >= 4 ? 0 : 0;
+	if (rank == deb_rank) {
+		printf("delta g_matr of proc with rank %d:\n", deb_rank);
+		tmp_matr.Print();
+	}
+
 	SumTwoDoublesGlobally(numerator, denominator);
+	LOG_DEBUG_MASTER("Collected alpha numerator %f", numerator);
+	LOG_DEBUG_MASTER("Collected alpha denominator %f", denominator);
 	if (fabs(denominator) < 10e-7)
 		throw PoissonException("Error: Denominator close to zero in CalcAlphaCGM\n");
 	return numerator / denominator;
