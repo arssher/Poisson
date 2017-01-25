@@ -87,9 +87,20 @@ def draw_error():
 
     run_gnuplot(fname, "abs_error.pdf", "Absolute error", '')
 
+# calculate max error without any drawings. We need this because gnuplot couldn't
+# swallow 2000x2000 dots on my machine.
+def calc_max_error():
+    data = collect_data("res")
+    max_error = 0.0
+    for row in data:
+        err = abs(correct_solution(row[0], row[1]) - row[2])
+        if err > max_error:
+            max_error = err
 
+    print "Max error is %s" % max_error
 
 if __name__ == '__main__':
     draw_mine()
     draw_correct()
     draw_error()
+    calc_max_error()
