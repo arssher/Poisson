@@ -559,7 +559,7 @@ void Poisson::DumpSolution() {
 	}
 	for (int i = 0; i < dots_num[0]; i++)
 		for (int j = 0; j < dots_num[1]; j++) {
-			fprintf(f, "%f, %f, %f\n", dots[0][i], dots[1][j], sol_matr(i, j));
+			fprintf(f, "%.17g, %.17g, %.17g\n", dots[0][i], dots[1][j], sol_matr(i, j));
 		}
 	fclose(f);
 }

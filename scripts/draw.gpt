@@ -2,7 +2,7 @@
 # dataf, outf, tit, zl
 
 # set terminal wxt
-set terminal pdf
+set terminal pdf font ",9"
 set output outf
 
 # angle of view
