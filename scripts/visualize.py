@@ -54,7 +54,7 @@ def correct_solution(x, y):
     return np.sin(x * y) + 1.0
 
 def draw_correct():
-    n = 1000
+    n = 100
     fname = "/tmp/correct.data"
 
     with open(fname, "w") as gpltf:

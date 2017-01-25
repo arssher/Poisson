@@ -8,3 +8,6 @@ poisson.err
 poisson
 *.o
 tol/
+.tramp_history
+
+!manual.pdf
