@@ -1,5 +1,7 @@
 /* Dummy matrix of doubles with m rows and n columns, growing
  * from the bottom left corner.
+ * The for (int i...) for (int j...) matr(i, j) traversal is faster than
+ * the reverse, i.e. we store the data by columns
  */
 class Matrix {
 public:
@@ -10,8 +12,8 @@ public:
 	Matrix& operator=(const Matrix &matr);
 	Matrix DeepCopy() const;
 	/* return element on column i and row j */
-	double operator()(int i, int j) const { return data[j*n + i]; }
-	double& operator()(int i, int j) { return data[j*n + i]; }
+	double operator()(int i, int j) const { return data[i*m + j]; }
+	double& operator()(int i, int j) { return data[i*m + j]; }
 	/* The caller must allocate memory himself */
 	void GetRow(int j, double *buf);
 	void GetColumn(int i, double *buf);
