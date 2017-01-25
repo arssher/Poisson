@@ -16,7 +16,7 @@ public:
 	void GetRow(int j, double *buf);
 	void GetColumn(int i, double *buf);
 	/* Scalar product this*matr2 as defined in the manual */
-	double ScalarProduct(const Matrix &matr2, double step, bool dbg=false) const;
+	double ScalarProduct(const Matrix &matr2, double step) const;
 	void Print() const;
 private:
 	int n; /* cols */

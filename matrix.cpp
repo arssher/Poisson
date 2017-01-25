@@ -60,7 +60,7 @@ void Matrix::GetColumn(int i, double *buf) {
 		buf[q] = (*this)(i, q);
 }
 
-double Matrix::ScalarProduct(const Matrix &matr2, double step, bool dbg) const {
+double Matrix::ScalarProduct(const Matrix &matr2, double step) const {
 	assert(n == matr2.n);
 	assert(m == matr2.m);
 
@@ -68,9 +68,6 @@ double Matrix::ScalarProduct(const Matrix &matr2, double step, bool dbg) const {
 	for (int i = 0; i < n; i++)
 		for (int j = 0; j < m; j++) {
 			sp += (*this)(i, j) * matr2(i, j) * step * step;
-			if (dbg)
-				printf("Multiplying %f * %f * %f * %f, now step is %f\n",
-					   (*this)(i, j), matr2(i, j), step, step, sp);
 		}
 
 	return sp;

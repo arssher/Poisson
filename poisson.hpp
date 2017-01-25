@@ -101,7 +101,7 @@ private:
 	void Solve();
 	void InitSolMatr();
 	void CalcResidMatr();
-	void ApplyLaplace(const Matrix &matr, Matrix &lap_matr, bool dbg=false);
+	void ApplyLaplace(const Matrix &matr, Matrix &lap_matr);
 	double LaplaceFormula(double center, double left, double right,
 						  double bottom, double top);
 	void ExchangeData(const Matrix &matr);
