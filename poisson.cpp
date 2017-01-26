@@ -41,7 +41,7 @@ Poisson::Poisson(double x0, double y0, double square_size, int grid_size,
 	/* Set rank and size */
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
-	LOG_DEBUG_MASTER("Size is %d\n", size);
+	LOG_INFO_MASTER("Size is %d\n", size);
 #ifdef _OPENMP
 	LOG_INFO_MASTER("OpenMP is ok, max num of threads: %d",
 					omp_get_max_threads());
@@ -54,7 +54,7 @@ Poisson::Poisson(double x0, double y0, double square_size, int grid_size,
 		// throw PoissonException("Error: we require at least 4 processors");
 	// }
 	proc_grid_size = static_cast<int>(floor(sqrt(size)));
-	LOG_DEBUG_MASTER("Proc grid size is %d\n", proc_grid_size);
+	LOG_INFO_MASTER("Proc grid size is %d\n", proc_grid_size);
 
 	/* we use only square grid of processors */
 	if (rank >= proc_grid_size*proc_grid_size) {
@@ -75,7 +75,7 @@ Poisson::Poisson(double x0, double y0, double square_size, int grid_size,
 	if (grid_size < 2*proc_grid_size) {
 		throw PoissonException("Error: grid size must be >= 2*proc grid size\n");
 	}
-	LOG_DEBUG_MASTER("Square starts at (%f, %f) of size %f, grid size %d\n",
+	LOG_INFO_MASTER("Square starts at (%f, %f) of size %f, grid size %d\n",
 					 x0, y0, square_size, grid_size);
 
 	time_t start;
