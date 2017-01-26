@@ -1,18 +1,25 @@
-CPPFLAGS := $(CPPFLAGS)
+# if MODE set to 'release', enable optimizations and hide debug info
+# if COMPILER set to 'ibm', IBM compiler is used, gcc otherwise
+# if OMP is set to something, we compile with OpenMP support using IBM
+# compiler, COMPILER var is ignored
 
 ifeq ($(MODE),release)
-   CPPFLAGS := $(CPPFLAGS) -D"LOG_LEVEL=2" -O3
+	CPPFLAGS := $(CPPFLAGS) -D"LOG_LEVEL=2" -O3
 else
-   mode = debug
-   CPPFLAGS :=  $(CPPFLAGS) -D"LOG_LEVEL=3" -g -O0
+	CPPFLAGS :=  $(CPPFLAGS) -D"LOG_LEVEL=3" -g -O0
 endif
 
-ifeq ($(COMPILER),ibm)
-   CXX := mpixlcxx_r
+ifdef OMP
+CXX := mpixlcxx_r
+CPPFLAGS := $(CPPFLAGS) -qsmp=omp
 else
-   # gcc 4.1.2 on BlueGene
-   CXX := mpicxx
-   CPPFLAGS := $(CPPFLAGS) -std=gnu++98
+ifeq ($(COMPILER),ibm)
+CXX := mpixlcxx
+else
+# gcc 4.1.2 on BlueGene
+CXX := mpicxx
+CPPFLAGS := $(CPPFLAGS) -std=gnu++98
+endif
 endif
 
 

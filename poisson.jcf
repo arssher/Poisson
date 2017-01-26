@@ -2,9 +2,12 @@
 # @ class = n128_m15
 # @ output = poisson.out
 # @ error = poisson.err
-# @ wall_clock_limit = 00:5:00
+# @ wall_clock_limit = 00:10:00
 # @ bg_size = 128
 # @ queue
-# /bgsys/drivers/ppcfloor/bin/mpirun -exe /gpfs/data/edu-cmc-stud16-628-06/task2/poisson -mode SMP -args "0 0 2 1000 1" -n 128
 # dump the result to "res" dir
-/bgsys/drivers/ppcfloor/bin/mpirun -exe /gpfs/data/edu-cmc-stud16-628-06/task2/poisson -mode SMP -args "0 0 2 2000 1 res" -n 128
+# /bgsys/drivers/ppcfloor/bin/mpirun -exe /gpfs/data/edu-cmc-stud16-628-06/task2/poisson -mode SMP -args "0 0 2 1000 1 res" -n 128
+# /bgsys/drivers/ppcfloor/bin/mpirun -exe /gpfs/data/edu-cmc-stud16-628-06/task2/poisson -mode SMP -args "0 0 2 2000 1" -n 10
+# with openmp
+# /bgsys/drivers/ppcfloor/bin/mpirun -exe /gpfs/data/edu-cmc-stud16-628-06/task2/poisson -mode SMP -env OMP_NUM_THREADS=4 -args "0 0 2 500 1 res" -n 10
+/bgsys/drivers/ppcfloor/bin/mpirun -exe /gpfs/data/edu-cmc-stud16-628-06/task2/poisson -mode SMP -env OMP_NUM_THREADS=4 -args "0 0 2 500 1" -n 10

@@ -10,4 +10,9 @@ poisson
 tol/
 .tramp_history
 
+doc/report/auto/
+*.aux
+*.log
+*.out
+
 !manual.pdf

@@ -33,6 +33,7 @@ Matrix& Matrix::operator=(const Matrix &matr) {
 
 Matrix Matrix::DeepCopy() const {
 	Matrix matr(n, m);
+	#pragma omp parallel for schedule (static)
 	for (int i = 0; i < n; i++)
 		for (int j = 0; j < m; j++) {
 			matr(i, j) = (*this)(i, j);
@@ -51,11 +52,13 @@ void Matrix::Print() const {
 }
 
 void Matrix::GetRow(int j, double *buf) {
+    #pragma omp parallel for schedule (static)
 	for (int p = 0; p < n; p++)
 		buf[p] = (*this)(p, j);
 }
 
 void Matrix::GetColumn(int i, double *buf) {
+	#pragma omp parallel for schedule (static)
 	for (int q = 0; q < m; q++)
 		buf[q] = (*this)(i, q);
 }
@@ -65,6 +68,7 @@ double Matrix::ScalarProduct(const Matrix &matr2, double step) const {
 	assert(m == matr2.m);
 
 	double sp = 0.0;
+	#pragma omp parallel for schedule (static) reduction(+:sp)
 	for (int i = 0; i < n; i++)
 		for (int j = 0; j < m; j++) {
 			sp += (*this)(i, j) * matr2(i, j) * step * step;
