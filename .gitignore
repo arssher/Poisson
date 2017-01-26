@@ -16,3 +16,6 @@ doc/report/auto/
 *.out
 
 !manual.pdf
+!doc/report/img/abs_error.pdf
+!doc/report/img/correct_sol.pdf
+!doc/report/img/mine_sol.pdf
