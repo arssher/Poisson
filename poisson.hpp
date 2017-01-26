@@ -4,11 +4,11 @@
 
 class PoissonException : public std::exception {
 public:
-    PoissonException(const char *_msg): msg(_msg) {}
+	PoissonException(const char *_msg): msg(_msg) {}
 
-    virtual const char* what() const throw() {
-        return msg;
-    }
+	virtual const char* what() const throw() {
+		return msg;
+	}
 
 private:
 	const char *msg;
@@ -38,10 +38,10 @@ private:
 	/* Grid step. Grid is uniform and symmetrical. */
 	double step;
 	/* Number of dots per process along either x or y axis,
-     * array of proc_grid_size size.
-     * dots_per_proc[i] = (how many x dots proc with ranks[0] = i has) =
-     * (how many y dots proc with ranks[1] = i has)
-     */
+	 * array of proc_grid_size size.
+	 * dots_per_proc[i] = (how many x dots proc with ranks[0] = i has) =
+	 * (how many y dots proc with ranks[1] = i has)
+	 */
 	int *dots_per_proc;
 	/* Number of dots along [x, y] axis on this specific processor */
 	int dots_num[2];
@@ -49,7 +49,7 @@ private:
 	double *dots[2];
 	/* this processor touches the [left, bottom, right, top] border? */
 	bool borders[4];
-    /* These 4 indexes (x_min, y_min, x_max, y_max) show range of inner dots
+	/* These 4 indexes (x_min, y_min, x_max, y_max) show range of inner dots
 	 * area part for this processor. Note that 'inner' here means globally
 	 * inner, i.e. out of global border. In the simplest case, when
 	 * the processor doesn't touch any borders, it will be (0, 0, dots_num[0],
@@ -60,15 +60,15 @@ private:
 	 */
 	int inner_dots_range[4];
 	/* Send buffers for messages going to the left, bottom, right and top from
-     * this processor.
+	 * this processor.
 	 */
 	double *send_buffers[4];
 	/* receive buffers for messages going from right, top, left, bottom to
-     * to this processor
+	 * to this processor
 	 */
 	double *recv_buffers[4];
 	/* just for debugging, to ensure that we have filled this buffer before
-     * accessing it
+	 * accessing it
 	 */
 	bool recv_buffer_used[4];
 	/* we need to mark matrix in checkerboard order to avoid deadlocks */
@@ -79,7 +79,7 @@ private:
 	/* solution, 'p' function in the manual */
 	Matrix sol_matr;
 	/* Used in thau calculations. Store it here to avoid reallocating
-     * every time
+	 * every time
 	 */
 	Matrix tmp_matr;
 	/* for CGM method */
@@ -118,10 +118,10 @@ private:
 	void DumpSolution();
 public:
    /* (x0, y0) and square_size define the square we are working on.
-    * grid_size*grid_size is the total number of dots
-    */
+	* grid_size*grid_size is the total number of dots
+	*/
 	Poisson(double x0, double y0, double square_size, int grid_size,
-		    int sdi_it,
+			int sdi_it,
 			double (*_F)(double x, double y),
 			double (*_Phi)(double x, double y),
 			char *dump_d = NULL);

@@ -52,7 +52,7 @@ void Matrix::Print() const {
 }
 
 void Matrix::GetRow(int j, double *buf) {
-    #pragma omp parallel for schedule (static)
+	#pragma omp parallel for schedule (static)
 	for (int p = 0; p < n; p++)
 		buf[p] = (*this)(p, j);
 }

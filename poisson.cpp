@@ -29,8 +29,8 @@ Poisson::Poisson(double x0, double y0, double square_size, int grid_size,
 	: F(_F), Phi(_Phi), dots_per_proc(NULL),
 	  sdi_iterations(sdi_it), eps(0.0001), dump_dir(dump_d) {
 	/* It is pretty important to initialize ptrs to NULL;
-     * otherwise, unallocated, they will be freed in the destructor
-     */
+	 * otherwise, unallocated, they will be freed in the destructor
+	 */
 	for (int i = 0; i < 2; i++ ) {
 		dots[i] = NULL;
 	}
@@ -71,7 +71,7 @@ Poisson::Poisson(double x0, double y0, double square_size, int grid_size,
 
 	/* We demand it to avoid fuss when the same dot occurs to be several
 	 * corners, when dot matrix is less than 2x2.
-     */
+	 */
 	if (grid_size < 2*proc_grid_size) {
 		throw PoissonException("Error: grid size must be >= 2*proc grid size\n");
 	}
@@ -133,7 +133,7 @@ void Poisson::DistributeDots(int grid_size) {
 	int dots_range[4] = {0, 0, dots_num[0], dots_num[1]};
 	int add_or_substract[4] = {1, 1, -1, -1};
 	for (int i = 0; i < 4; i++) {
-	    inner_dots_range[i] = dots_range[i] + add_or_substract[i] * borders[i];
+		inner_dots_range[i] = dots_range[i] + add_or_substract[i] * borders[i];
 	}
 
 	LOG_DEBUG("My rank is %d, i.e. (%d , %d), I own %d x %d dots and top touching is %d\n",
@@ -221,14 +221,14 @@ double Poisson::SteepDescentIteration() {
 	double tau = CalcTauSteepDescent();
 	LOG_DEBUG_MASTER("SD Tau is %.17g", tau);
 	/* There should be the following pragma, but BlueGene\P doesn't support it
-     * either
-     */
-    /* #pragma omp parallel for schedule(static) private(new_sol_val) reduction(max:error) */
+	 * either
+	 */
+	/* #pragma omp parallel for schedule(static) private(new_sol_val) reduction(max:error) */
 	int j;
 	double thread_local_error = 0.0;
-    #pragma omp parallel private(j, new_sol_val) firstprivate(thread_local_error)
+	#pragma omp parallel private(j, new_sol_val) firstprivate(thread_local_error)
 	{
-        # pragma omp for schedule(static)
+		# pragma omp for schedule(static)
 		for (int i = 0; i < dots_num[0]; i++)
 			for (j = 0; j < dots_num[1]; j++) {
 				new_sol_val = sol_matr(i, j) - tau * resid_matr(i, j);
@@ -267,7 +267,7 @@ double Poisson::CGMIteration() {
 	double thread_local_error = 0.0;
 	#pragma omp parallel private(j, new_sol_val) firstprivate(thread_local_error)
 	{
-       # pragma omp for schedule(static)
+		# pragma omp for schedule(static)
 		for (int i = 0; i < dots_num[0]; i++)
 			for (j = 0; j < dots_num[1]; j++) {
 				new_sol_val = sol_matr(i, j) - tau * g_matr(i, j);
@@ -275,7 +275,7 @@ double Poisson::CGMIteration() {
 					std::max(thread_local_error, fabs(sol_matr(i, j) - new_sol_val));
 				sol_matr(i, j) = new_sol_val;
 			}
-        #pragma omp critical
+		#pragma omp critical
 		{
 			error = std::max(error, thread_local_error);
 		}
@@ -292,11 +292,11 @@ void Poisson::InitSolMatr() {
 
 	/* Inner part */
 	srand(time(NULL) + rank);
-    /* better to use collapse in all such places, but it is not supported by
-       BlueGene */
-    /* #pragma omp parallel for collapse(2) */
-    int j;
-    #pragma omp parallel for schedule(static) private(j)
+	/* better to use collapse in all such places, but it is not supported by
+	   BlueGene */
+	/* #pragma omp parallel for collapse(2) */
+	int j;
+	#pragma omp parallel for schedule(static) private(j)
 	for (int i = inner_dots_range[0]; i < inner_dots_range[2]; i++)
 		for (j = inner_dots_range[1]; j < inner_dots_range[3]; j++) {
 			/* not sure which values here are better */
@@ -315,7 +315,7 @@ void Poisson::CalcResidMatr() {
 
 	/* substact F(x, y) */
 	int j;
-    #pragma omp parallel for schedule(static) private(j)
+	#pragma omp parallel for schedule(static) private(j)
 	for (int i = inner_dots_range[0]; i < inner_dots_range[2]; i++)
 		for (j = inner_dots_range[1]; j < inner_dots_range[3]; j++) {
 			resid_matr(i, j) -= (*F)(dots[0][i], dots[1][j]);
@@ -325,7 +325,7 @@ void Poisson::CalcResidMatr() {
 #define LAPLACE_COMPUTE_BORDER(r, max_i, center_ind, left, right, bottom, top) do { \
 		if (!borders[r]) { \
 			assert(recv_buffer_used[(r + 2) % 4]); \
-            OMP_PARA_FOR \
+			OMP_PARA_FOR \
 			for(int i = 1; i < max_i; i++) { \
 				lap_matr center_ind = \
 					LaplaceFormula(matr center_ind, left, right, bottom, top); \
@@ -343,7 +343,7 @@ void Poisson::ApplyLaplace(const Matrix &matr, Matrix &lap_matr) {
 	 * the borders of this processor are global borders or not
 	 */
 	int j;
-    #pragma omp parallel for schedule(static) private(j)
+	#pragma omp parallel for schedule(static) private(j)
 	for (int i = 1; i < dots_num[0] - 1; i++)
 		for (j = 1; j < dots_num[1] - 1; j++) {
 			lap_matr(i, j) = LaplaceFormula(matr(i, j),
@@ -432,7 +432,7 @@ void Poisson::ExchangeData(const Matrix &matr) {
 		send_buffers[0][j] = matr(0, j);
 		send_buffers[2][j] = matr(dots_num[0] - 1, j);
 	}
-    #pragma omp parallel for schedule(static)
+	#pragma omp parallel for schedule(static)
 	for (int i = 0; i < dots_num[0]; i++) { /* horizontal */
 		send_buffers[1][i] = matr(i, 0);
 		send_buffers[3][i] = matr(i, dots_num[1] - 1);
@@ -612,7 +612,7 @@ void Poisson::DumpSolution() {
 Poisson::~Poisson() {
 	if (dots_per_proc)
 		delete[] dots_per_proc;
-    for (int i = 0; i < 2; i++) {
+	for (int i = 0; i < 2; i++) {
 		if (dots[i]) {
 			delete[] dots[i];
 		}
