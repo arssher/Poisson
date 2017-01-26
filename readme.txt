@@ -19,6 +19,7 @@ Or, if you prefer icpc+impi,
    module add impi
 
 After that mpicxx will point to the needed compiler.
+Before running the program you must copy it to the '~/_scratch' directory.
 Run the program like that:
    sbatch -p regular4 -n128  --time=0-00:2:00 --error=poisson_gcc_2000_128.err ompi ./poisson 0 0 2 2000 1
 Replace 'ompi' with 'impi' if you use Intel stuff.

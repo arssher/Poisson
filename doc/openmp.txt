@@ -1,0 +1,16 @@
+OpenMP:
+http://bisqwit.iki.fi/story/howto/openmp/
+# pragma omp parallel -- create a team of threads
+# pragma omp for -- share loop, by default static schedule.
+# Note that counters must be declared as private if not defined inline
+# variables are shared between threads by default; mark it as a private
+# to create a copy for each thread.
+
+collapse allows sharing of nested loops
+
+sections -- execute one section by one thread, order of sections not defined
+http://jakascorner.com/blog/2016/05/omp-sections.html
+
+reductions is a handy and fast mix of private, shared atomic clauses.
+
+https://pdfs.semanticscholar.org/4e60/37127e85445079272e1cb5574cbcce2e175e.pdf
